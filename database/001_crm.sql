@@ -17,7 +17,7 @@ create table public.crm_records(
  source text not null default '' check(length(source)<=500),notes text not null default '' check(length(notes)<=20000),
  due_date date,amount_cents bigint not null default 0 check(amount_cents between 0 and 10000000000),paid_cents bigint not null default 0 check(paid_cents>=0 and paid_cents<=amount_cents),quantity integer not null default 1 check(quantity between 1 and 1000000),
  archived boolean not null default false,version integer not null default 1,created_at timestamptz not null default now(),updated_at timestamptz not null default now(),
- unique(brand_id,id),foreign key(brand_id,owner_id) references public.crm_members(brand_id,user_id),foreign key(brand_id,related_id) references public.crm_records(brand_id,id),
+ unique(brand_id,id),foreign key(brand_id,owner_id) references public.crm_members(brand_id,user_id) on delete set null (owner_id),foreign key(brand_id,related_id) references public.crm_records(brand_id,id),
  check((kind='contact' and status in ('Repéré','À qualifier','Qualifié','Partenaire','Client','Ne plus contacter')) or (kind='deal' and status in ('À préparer','Contacté','Échange en cours','Offre transmise','Gagné','Perdu')) or (kind='task' and status in ('À faire','En cours','Terminé')) or (kind='order' and status in ('À confirmer','Acompte attendu','En production','Solde attendu','Expédiée','Livrée','Annulée')) or (kind='product' and status in ('Actif','À valider','Archivé')))
 );
 create unique index crm_contact_email_unique on public.crm_records(brand_id,lower(trim(email))) where kind='contact' and email<>'' and not archived;
