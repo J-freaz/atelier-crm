@@ -1,0 +1,4 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {RemoteStore} from '../store.mjs';
+test('expired session cannot send write',async()=>{const s=new RemoteStore();await assert.rejects(()=>s.save({name:'test'}),/expirée/);});
+test('server rejection is not reported as saved',async t=>{t.mock.method(globalThis,'fetch',async()=>({ok:false,status:403}));const s=new RemoteStore();s.token='test';s.expires=Date.now()+10000;await assert.rejects(()=>s.save({name:'test'}),/rôle/);});
+test('optimistic version is transmitted and zero-row update fails',async t=>{let url;t.mock.method(globalThis,'fetch',async u=>{url=u;return{ok:true,status:200,json:async()=>[]};});const s=new RemoteStore();s.token='test';s.expires=Date.now()+10000;await assert.rejects(()=>s.save({id:'abc',version:3,name:'test'}),/changé/);assert.match(url,/version=eq.3/);});
