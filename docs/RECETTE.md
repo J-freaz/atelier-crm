@@ -21,4 +21,4 @@ Créer quatre comptes test : A propriétaire marque 1, B éditeur marque 1, C le
 ## Utilisateurs
 Vérifier connexion, déconnexion, expiration, absence de données au retour après déconnexion, écran mobile, import/doublons, exports et statut Ne plus contacter.
 
-Statut initial : recette distante EN ATTENTE de projet dédié et de comptes validés.
+Recette SQL effectuée le 5 octobre 2026 sur le projet Nanayé dédié : `tests/rls.sql` et `tests/reserved-access.sql` réussis, transactions annulées après validation. Appel HTTP anonyme à crm_records : refus 401. Première connexion Google réelle et sauvegarde/restauration restent à valider.
