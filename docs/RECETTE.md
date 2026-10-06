@@ -22,3 +22,14 @@ Créer quatre comptes test : A propriétaire marque 1, B éditeur marque 1, C le
 Vérifier connexion, déconnexion, expiration, absence de données au retour après déconnexion, écran mobile, import/doublons, exports et statut Ne plus contacter.
 
 Recette SQL effectuée le 5 octobre 2026 sur le projet Nanayé dédié : `tests/rls.sql` et `tests/reserved-access.sql` réussis, transactions annulées après validation. Appel HTTP anonyme à crm_records : refus 401. Première connexion Google réelle et sauvegarde/restauration restent à valider.
+
+## Attribution et préparation des messages — 6 octobre 2026
+- Attribution directe depuis Contacts, enregistrée avec contrôle de version ; membres de la marque uniquement.
+- Préparer un message utilise le responsable comme signature par défaut ; signature modifiable.
+- Enregistrer la fiche avant de préparer le message si des champs ont changé.
+- Analyse manuelle, au plus 4 pages publiques et extraits sourcés datés. 10 scans / heure / utilisateur / marque, 40 / jour / marque. Les échecs comptent.
+- Rédaction structurée, sans modèle IA, sans clé tierce. Pas de promesse commerciale ou prix ajouté automatiquement.
+- Aucun envoi, aucun changement de statut, aucun stockage du brouillon après fermeture.
+- Respect de robots.txt ; sites bloqués, pages volumineuses, PDF ou contenu chargé uniquement par JavaScript peuvent rester non analysables.
+- Fonction privée : session vérifiée, RLS, rôle éditeur et contact actif. URL issue de la fiche autorisée, pas d’URL libre dans la requête. DNS IPv4 public validé puis connexion épinglée, redirections vérifiées et limitées au domaine/www.
+- Coût : utilisation des quotas d’Edge Functions Supabase existants ; pas de service IA payant ni de collecte programmée.
