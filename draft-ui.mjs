@@ -1,5 +1,5 @@
 import {escapeHTML as e} from './domain.mjs';
-import {composeDraft} from './prospect.mjs';
+import {composeDraft} from './prospect.mjs?v=20261006-2';
 export function openProspectDraft({dialog,record,brand,members,user,store,demo,canEdit,back}){
  if(record.status==='Ne plus contacter'||record.archived)return;
  const token=crypto.randomUUID(),controller=new AbortController();let scan=null;
@@ -15,11 +15,11 @@ export function openProspectDraft({dialog,record,brand,members,user,store,demo,c
  for(const id of ['draft-text','draft-subject','draft-offer','draft-sender'])q(id).addEventListener('input',invalidate);
  function build(){q('draft-error').textContent='';const offer=q('draft-offer').value.trim();if(!offer){q('draft-error').textContent='Décrivez d’abord l’offre de cette marque.';return;}const choice=q('draft-evidence');const fact=scan?.evidence[Number(choice?.value||0)];const result=composeDraft({brand:brand.name,contact:record.name,sender:q('draft-sender').value,offer,evidence:fact?[fact]:[]});q('draft-subject').value=result.subject;q('draft-text').value=result.body;invalidate();}
  q('draft-build').onclick=build;
- q('scan-site').onclick=async()=>{const btn=q('scan-site');btn.disabled=true;q('scan-state').textContent='Consultation des pages publiques en cours…';q('draft-error').textContent='';try{
+ q('scan-site').onclick=async()=>{const btn=q('scan-site');btn.disabled=true;scan=null;q('scan-sources').innerHTML='';q('draft-text').value='';q('draft-subject').value='';invalidate();q('scan-state').textContent='Consultation des pages publiques en cours…';q('draft-error').textContent='';try{
   const result=await store.scan(record.id,controller.signal);if(!active())return;scan=result;
   q('scan-state').textContent=`${result.pages.length} page(s) lue(s) · ${new Date(result.scannedAt).toLocaleString('fr-FR')}`;
-  q('scan-sources').innerHTML=`${result.evidence.length?`<label for="draft-evidence">Passage retenu pour l’accroche</label><select id="draft-evidence">${result.evidence.map((f,i)=>`<option value="${i}">${e(f.excerpt)}</option>`).join('')}</select>`:'<p>Aucun passage suffisamment pertinent détecté. Le texte restera général : ajoutez votre observation après vérification.</p>'}<details open><summary>Pages consultées et limites</summary><ul>${result.pages.map(p=>`<li><a href="${e(p.url)}" target="_blank" rel="noopener noreferrer">${e(p.title||p.url)}</a></li>`).join('')}</ul>${result.warnings.map(w=>`<p class="note">${e(w)}</p>`).join('')}</details>`;
-  if(q('draft-evidence'))q('draft-evidence').onchange=()=>{invalidate();q('draft-error').textContent='Cliquez sur « Préparer / actualiser le texte » pour utiliser ce passage.';};build();
+  q('scan-sources').innerHTML=`${result.evidence.length?`<label for="draft-evidence">Passage retenu pour l’accroche</label><select id="draft-evidence">${result.evidence.map((f,i)=>`<option value="${i}">${e(f.excerpt)}</option>`).join('')}</select><p id="evidence-source" class="note"></p>`:'<p>Aucun passage suffisamment pertinent détecté. Le texte restera général : ajoutez votre observation après vérification.</p>'}<details open><summary>Pages consultées et limites</summary><ul>${result.pages.map(p=>`<li><a href="${e(p.url)}" target="_blank" rel="noopener noreferrer">${e(p.title||p.url)}</a></li>`).join('')}</ul>${result.warnings.map(w=>`<p class="note">${e(w)}</p>`).join('')}</details>`;
+  const source=()=>{const f=result.evidence[Number(q('draft-evidence').value)];q('evidence-source').innerHTML=`Source de l’accroche : <a href="${e(f.url)}" target="_blank" rel="noopener noreferrer">${e(f.title||f.url)}</a>`;};if(q('draft-evidence')){source();q('draft-evidence').onchange=()=>{source();invalidate();q('draft-error').textContent='Cliquez sur « Préparer / actualiser le texte » pour utiliser ce passage.';};}build();
  }catch(err){if(active()&&err.name!=='AbortError')q('scan-state').textContent=err.message;}finally{if(active())btn.disabled=false;}};
  q('draft-copy').onclick=async()=>{try{await navigator.clipboard.writeText('Objet : '+q('draft-subject').value+'\n\n'+q('draft-text').value);q('draft-error').textContent='Brouillon copié. Aucun envoi effectué.';}catch{q('draft-error').textContent='Copie indisponible : sélectionnez le texte pour le copier.';}};
  build();

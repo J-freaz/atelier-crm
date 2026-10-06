@@ -51,7 +51,7 @@ Deno.serve(async(req:Request)=>{
   while(queue.length&&pages.length+warnings.length<4){
    const url=queue.shift()!;if(seen.has(url))continue;seen.add(url);
    try{const p=await page(url);if(pages.some(x=>x.url===p.url))continue;pages.push(p);const root=new URL('/',p.url).href;if(!seen.has(root)&&!queue.includes(root))queue.push(root);for(const link of candidateLinks(p,new URL(p.url).origin)){if(!seen.has(link)&&!queue.includes(link))queue.push(link);}}
-   catch(err){warnings.push(err instanceof Error?err.message:'Page non analysée.');}
+   catch(err){const message=err instanceof Error?err.message:'';warnings.push(/^(Cette page|Le site|Page |Redirection |Trop de |Seules |Destination |Format de |Transfert |Réponse HTTP)/.test(message)?message:'Cette page n’a pas pu être lue. Préparez le message manuellement si nécessaire.');}
   }
   if(!pages.length)return response({error:warnings[0]||'Aucune page lisible. Vous pouvez rédiger un message manuellement.'},422);
   return response({scannedAt:new Date().toISOString(),pages:pages.map(p=>({url:p.url,title:p.title})),evidence:observations(pages),warnings,method:'structured'});
