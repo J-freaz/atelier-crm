@@ -26,12 +26,13 @@ Deno.serve(async(req:Request)=>{
   const reserve=await fetch(base+'/rest/v1/rpc/crm_reserve_scan',{method:'POST',headers,body:JSON.stringify({record_id:recordId}),signal:AbortSignal.timeout(8000)});
   if(!reserve.ok)return response({error:'Votre rôle ne permet pas cette analyse.'},403);
   if(await reserve.json()!==true)return response({error:'Limite atteinte : 10 analyses par heure et personne, 40 par jour pour cette marque.'},429);
-  const robots=new Map<string,string>();const warnings:string[]=[];
+  const robots=new Map<string,string>();const warnings:string[]=[];const deadline=Date.now()+30000;
+  const read=(url:string,options={})=>{const remaining=deadline-Date.now();if(remaining<500)throw Error('Le site a dépassé la durée maximale de consultation.');return readPublic(url,{...options,timeout:Math.min(8000,remaining)});};
   const allowedHosts=new Set([start.hostname,start.hostname.startsWith('www.')?start.hostname.slice(4):'www.'+start.hostname]);
   async function robotsFor(u:URL){
    if(robots.has(u.origin))return robots.get(u.origin)!;
    // Fail closed for robots redirects/errors; do not bypass site restrictions.
-   const r=await readPublic(u.origin+'/robots.txt',{maxBytes:100000});
+   const r=await read(u.origin+'/robots.txt',{maxBytes:100000});
    if(r.status!==200&&r.status!==404)throw Error('Le site ne permet pas de vérifier ses règles de consultation.');
    const text=r.status===404?'':r.text;robots.set(u.origin,text);return text;
   }
@@ -40,7 +41,7 @@ Deno.serve(async(req:Request)=>{
    for(let hop=0;hop<4;hop++){
     if(!allowedHosts.has(u.hostname))throw Error('Redirection vers un autre site : analyse arrêtée.');
     if(!robotsAllowed(await robotsFor(u),u.href))throw Error('Cette page refuse la consultation automatisée.');
-    const r=await readPublic(u.href);
+    const r=await read(u.href);
     if([301,302,303,307,308].includes(r.status)){if(!r.headers.location)throw Error('Redirection invalide.');const next=publicURL(new URL(r.headers.location,u).href);if(u.protocol==='https:'&&next.protocol!=='https:')throw Error('Redirection non sécurisée.');u=next;continue;}
     if(r.status!==200)throw Error('Page inaccessible (HTTP '+r.status+').');
     if(!String(r.headers['content-type']||'').includes('text/html'))throw Error('Seules les pages web HTML sont analysées.');
@@ -48,8 +49,9 @@ Deno.serve(async(req:Request)=>{
    }throw Error('Trop de redirections.');
   }
   const pages=[];const seen=new Set<string>();const queue=[start.href];
-  while(queue.length&&pages.length+warnings.length<4){
-   const url=queue.shift()!;if(seen.has(url))continue;seen.add(url);
+  let attempts=0;
+  while(queue.length&&attempts<4){
+   const url=queue.shift()!;if(seen.has(url))continue;seen.add(url);attempts++;
    try{const p=await page(url);if(pages.some(x=>x.url===p.url))continue;pages.push(p);const root=new URL('/',p.url).href;if(!seen.has(root)&&!queue.includes(root))queue.push(root);for(const link of candidateLinks(p,new URL(p.url).origin)){if(!seen.has(link)&&!queue.includes(link))queue.push(link);}}
    catch(err){const message=err instanceof Error?err.message:'';warnings.push(/^(Cette page|Le site|Page |Redirection |Trop de |Seules |Destination |Format de |Transfert |Réponse HTTP)/.test(message)?message:'Cette page n’a pas pu être lue. Préparez le message manuellement si nécessaire.');}
   }
