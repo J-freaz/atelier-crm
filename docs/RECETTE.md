@@ -33,3 +33,17 @@ Recette SQL effectuée le 5 octobre 2026 sur le projet Nanayé dédié : `tests/
 - Respect de robots.txt ; sites bloqués, pages volumineuses, PDF ou contenu chargé uniquement par JavaScript peuvent rester non analysables.
 - Fonction privée : session vérifiée, RLS, rôle éditeur et contact actif. URL issue de la fiche autorisée, pas d’URL libre dans la requête. DNS IPv4 public validé puis connexion épinglée, redirections vérifiées et limitées au domaine/www.
 - Coût : utilisation des quotas d’Edge Functions Supabase existants ; pas de service IA payant ni de collecte programmée.
+
+## Livraison du 6 octobre 2026 — plaquette et suivi du contact
+- Commit publié : cfacb1e4fd40d783036bf2929e6b27901e7e5400.
+- Option de lien vers la plaquette EVJF, désactivée par défaut ; PDF à joindre manuellement. Document limité à l’identité de la marque Nanayé (et sa démonstration), jamais choisi par simple homonymie.
+- Fiche contact : dossiers liés, y compris archivés, et 50 derniers événements du contact et de ses dossiers liés. Filtrage par marque et identifiants.
+- La copie n’est pas un envoi. Aucune intégration mail ni récupération des réponses ajoutée.
+- Vérification : 20 tests réussis ; attribution à Lyne puis historique de modification Jefferson vérifiés en démonstration locale ; inclusion de la plaquette vérifiée sur GitHub Pages.
+
+
+## Brouillons — vérification locale du 15 octobre 2026
+
+Résultat : 27 tests JS réussis, migration testée dans PGlite (auth simulée), restauration du brouillon et trace dans la fiche vérifiées par navigateur. Pas de déploiement distant.
+
+Avant activation : appliquer la migration après accord ; vérifier avec les comptes réels éditeur/lecteur/hors marque, deux sauvegardes concurrentes, expiration de session, contact exclu et désactivation du drapeau. L’enregistrement d’un brouillon ne doit jamais afficher « envoyé » ni passer le contact en « contacté ».

@@ -4,7 +4,7 @@ CRM multimarque en français. Interface statique compatible GitHub Pages, donné
 ## État au 5 octobre 2026
 Interface publiée. Base privée Nanayé dédiée installée ; tests SQL multimarques et d'attribution des accès réussis. Les données commerciales sont uniquement dans la base, jamais dans ce dépôt.
 
-Connexion Google intégrée avec le SDK officiel Supabase 2.117.2, flux PKCE. **Activation Google externe et première connexion réelle encore en attente.** Le bouton reste désactivé tant que `googleEnabled` vaut false. La démonstration reste fictive et temporaire.
+Connexion Google intégrée avec le SDK officiel Supabase 2.117.2, flux PKCE. **Connexions réelles Jefferson et Lyne observées le 6 octobre 2026 ; non retestées lors de la préparation du 15 octobre.** Le bouton reste désactivé tant que `googleEnabled` vaut false. La démonstration reste fictive et temporaire.
 
 ## Fonctions
 - Marques distinctes, propriétaires, éditeurs et lecteurs. Vue personnelle par responsable, vue équipe.
@@ -33,3 +33,19 @@ Connexion Google intégrée avec le SDK officiel Supabase 2.117.2, flux PKCE. **
 - Suivi commercial ; pas de facture légale, synchronisation bancaire, calcul de TVA, stock transactionnel ni automatisation e-mail.
 - Sauvegardes/restauration de la base à configurer et tester selon le plan retenu avant exploitation durable. Les exports CSV sont des extractions, pas une sauvegarde complète.
 - Dépôt public : ne pas joindre fichiers clients, exports, captures privées ou secrets aux commits/issues.
+
+## Préparation locale du 15 octobre 2026 — brouillons enregistrés
+
+Déploiement autorisé le 15 octobre 2026. Migration appliquée via l’éditeur SQL du projet Nanayé (connecteur indisponible), puis recette transactionnelle distante annulée : sauvegarde, attribution, audit et conflit vérifiés. RLS active, accès anonyme et suppression interdits. `savedDraftsEnabled` activé pour publication. La migration exécutée dans l’éditeur ne crée pas automatiquement une entrée dans l’historique CLI.
+
+- Un brouillon par contact : destinataire, objet, texte et signature ; seule la dernière version est conservée.
+- Auteur réel et date imposés côté base ; trace dans l’historique du contact, explicitement sans envoi.
+- Contrôle des modifications concurrentes, droits de marque et exclusion des contacts archivés / « Ne plus contacter ».
+- Une signature sélectionnée n’autorise pas un envoi depuis cette personne. Gmail n’est pas raccordé.
+- La délégation Gmail déclarée par Jefferson ne constitue pas une autorisation OAuth pour le CRM.
+
+Vérifications : 27 tests JavaScript réussis ; enregistrement puis fermeture/réouverture vérifiés dans le navigateur en démonstration. Migration exécutée avec PGlite 0.5.9 en local, auth.uid simulé : création, auteur, version, accès lecteur/extérieur, opt-out et suppression interdite vérifiés. Cela ne remplace pas la recette Supabase distante.
+
+Après accord explicite de publication : appliquer la migration `supabase/migrations/20261015103321_saved_message_drafts.sql` uniquement au projet Nanayé `qoaqzztwkhjvzfyeommm`, vérifier les droits sur le service réel, puis activer le drapeau et publier les fichiers frontend, dont `message-drafts.mjs`. En cas d’échec, laisser le drapeau désactivé. Ne publier aucun fichier de `work/crm-private`.
+
+La connexion Gmail (envoi manuel validé, réponses et pièces jointes) reste une étape séparée, nécessitant le consentement Google de la boîte commerciale et une gestion serveur des jetons.
