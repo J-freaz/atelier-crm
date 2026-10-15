@@ -1,10 +1,10 @@
-import {renderGmailPanel,bindGmailPanel} from './gmail-ui.mjs?v=20261015-2';
+import {renderGmailPanel,bindGmailPanel} from './gmail-ui.mjs?v=20261015-3';
 import {renderContactContext} from './contact-context.mjs?v=20261006-3';
 import {openProspectDraft} from './draft-ui.mjs?v=20261015-1';
-import {config} from './config.mjs?v=20261015-2';
+import {config} from './config.mjs?v=20261015-3';
 import {googleSignIn} from './auth.mjs';
 import {stages,labels,escapeHTML as e,cents,money,day,validate,visible,metrics,csvCell,duplicate} from './domain.mjs';
-import {RemoteStore,DemoStore} from './store.mjs?v=20261015-2';
+import {RemoteStore,DemoStore} from './store.mjs?v=20261015-3';
 const root=document.querySelector('#app'),dialog=document.querySelector('#editor');
 let store,data,brand,user,view='home',mine=false,query='',status='',showArchived=false,demo=false,loading=false;
 const names={home:'Vue d’ensemble',...labels,activity:'Historique',settings:'Marques & équipe'};
