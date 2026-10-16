@@ -14,3 +14,9 @@ function mock({failSend=false,deny=false}={}){let state='prepared',sends=0;const
 test('send is one attempt and repeat request never sends twice',async()=>{const m=mock(),h=createMailHandler({env,fetcher:m.fetcher});assert.equal((await h(req({action:'send',id,confirm:true}))).status,200);await h(req({action:'send',id,confirm:true}));assert.equal(m.sends,1);assert.equal(m.state,'sent');});
 test('ambiguous send stays unknown and cannot be retried automatically',async()=>{const m=mock({failSend:true}),h=createMailHandler({env,fetcher:m.fetcher});assert.equal((await h(req({action:'send',id,confirm:true}))).status,409);await h(req({action:'send',id,confirm:true}));assert.equal(m.sends,1);assert.equal(m.state,'unknown');});
 test('read-only member and absent confirmation cannot send',async()=>{const m=mock({deny:true}),h=createMailHandler({env,fetcher:m.fetcher});assert.equal((await h(req({action:'send',id,confirm:true}))).status,400);assert.equal(m.sends,0);const n=mock();assert.equal((await createMailHandler({env,fetcher:n.fetcher})(req({action:'send',id}))).status,400);assert.equal(n.sends,0);});
+test('archive and restore require CRM authentication but never access Gmail tokens',async()=>{
+ for(const action of ['archive','restore']){
+  const calls=[];const h=createMailHandler({env,fetcher:async(url,o)=>{calls.push(url);if(url.endsWith('/auth/v1/user'))return Response.json({id:'actor'});if(url.includes('/rpc/')){assert.equal(JSON.parse(o.body).operation,action);return Response.json({id,status:action==='archive'?'archived':'prepared'});}throw Error('Unexpected external access');}});
+  assert.equal((await h(req({action,id}))).status,200);assert.equal(calls.length,2);
+ }
+});

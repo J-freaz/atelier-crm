@@ -1,4 +1,4 @@
-import {previewMail} from './mail-ui.mjs?v=20261015-4';
+import {previewMail} from './mail-ui.mjs?v=20261016-1';
 import {brochureFor} from './contact-context.mjs?v=20261006-3';
 import {escapeHTML as e} from './domain.mjs';
 import {composeDraft} from './prospect.mjs?v=20261006-2';

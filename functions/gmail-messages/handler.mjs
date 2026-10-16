@@ -18,12 +18,16 @@ export function createMailHandler({env,fetcher=fetch}){
    const user=await session.json();if(!user.id)return respond({error:'Session invalide.'},401);
    const raw=await req.text();if(raw.length>30000)return respond({error:'Message trop long.'},400);
    const input=JSON.parse(raw);
-   if(!['prepare','send','sync','test-history'].includes(input.action))return respond({error:'Action inconnue.'},400);
+   if(!['prepare','send','sync','test-history','archive','restore'].includes(input.action))return respond({error:'Action inconnue.'},400);
    rpc=async(operation,payload={})=>{
     const r=await fetcher(base+'/rest/v1/rpc/crm_mail_internal',{method:'POST',headers:{apikey:service,Authorization:'Bearer '+service,'Content-Type':'application/json'},body:JSON.stringify({operation,actor:user.id,payload}),signal:AbortSignal.timeout(8000)});
     if(!r.ok)throw Error('Droits insuffisants, fiche modifiée ou destinataire différent de la fiche.');return r.json();
    };
    // This checks membership before any external call. Tokens never reach the browser.
+   if(['archive','restore'].includes(input.action)){
+    if(!/^[0-9a-f-]{36}$/.test(input.id||''))throw Error('Contact invalide.');
+    return respond(await rpc(input.action,{id:input.id}));
+   }
    const saved=await rpc('token');if(!saved?.cipher)throw Error('Raccordez d’abord la boîte commerciale.');
    async function pdf(){
     const r=await fetcher(brochure.url,{redirect:'error',signal:AbortSignal.timeout(15000)});
