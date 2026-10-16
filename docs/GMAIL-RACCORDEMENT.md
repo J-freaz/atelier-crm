@@ -1,3 +1,14 @@
+# État du 16 octobre 2026 — messagerie
+
+- Connexion de la boîte commerciale confirmée lors de la reprise : commercial.nanaye@gmail.com. Les identités CRM restent individuelles.
+- Production : gmail-connect et prospect-scan seulement ; envoi et suivi non déployés.
+- Local : choix Jefferson/Lyne pour un test individuel avec PDF EVJF ; réponses des tests conservées séparément des contacts ; prévisualisation et confirmation obligatoires ; aucun renvoi automatique après résultat incertain.
+- 43 tests JavaScript réussis. Recette SQL PGlite 0.5.9 réussie, incluant les deux destinataires autorisés, le stockage de leurs réponses, les droits et l'isolation. Ne remplace pas une recette de production.
+- Aucun e-mail réel envoyé. Publication de la migration et de gmail-messages, activation du drapeau, puis essais réels restent à effectuer.
+- Contrôle de cohérence : retrait de deux références à des variables inexistantes dans les écrans de création de marque et d'import.
+
+## Journal antérieur (état historique, non actuel)
+
 # Raccordement Gmail — préparation du 15 octobre 2026
 
 ## État au déploiement du 15 octobre 2026
