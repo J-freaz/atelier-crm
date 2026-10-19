@@ -1,6 +1,6 @@
-# Profil Opéria — contrat local
+# Profil Opéria — contrat de données
 
-Version du 16 octobre 2026. Préparation locale uniquement. Aucun SQL de ce lot n’a été exécuté dans un projet distant.
+Mise à jour du 19 octobre 2026. Le schéma Opéria a été appliqué en production depuis l’éditeur SQL Supabase, après autorisation de publication. Les contrôles locaux et les vérifications de production sont distingués ci-dessous.
 
 ## Structure
 
@@ -37,7 +37,9 @@ L’ancien statut ambigu `Démo` devient `Démo réalisée` seulement en présen
 
 ## Base de données et droits
 
-`database/005_operia_profile.sql` est un script préparatoire. Sa copie `supabase/migrations/20261016162535_operia_profile.sql` a été générée avec la CLI Supabase, puis remplie à l’identique. Aucune des deux n’a été appliquée à distance ; exécuter uniquement la migration datée après validation de la publication.
+`database/005_operia_profile.sql` conserve le SQL préparé. Sa copie `supabase/migrations/20261016162535_operia_profile.sql` a été générée avec la CLI Supabase, puis remplie à l’identique. Ce SQL a été appliqué en production le 19 octobre 2026 depuis l’éditeur SQL Supabase.
+
+**Ne pas rejouer ces scripts sur cette base : les colonnes, fonctions et index existent déjà.** Avant une future opération de migration par la CLI, vérifier la cohérence entre le schéma effectivement appliqué et l’historique des migrations ; une exécution dans l’éditeur SQL ne prouve pas à elle seule l’enregistrement dans cet historique. Les fichiers SQL déjà appliqués restent inchangés.
 
 RPC ajoutées :
 
@@ -48,8 +50,20 @@ Les points d’entrée publics utilisent `security invoker`, les écritures priv
 
 ## Vérifications réalisées
 
+Contrôles locaux, relancés le 19 octobre 2026 :
+
 - 20 tests de domaine : montants, opposition, doublons, marques, données absentes, sources périmées ou futures, tri et historique.
+- 11 tests de parcours : préparation des brouillons, séparation des marques, droits et reprise du lot source avec contrôle de non-duplication. Les 31 tests de domaine et de parcours ont réussi.
 - `tests/operia-migration-check.mjs` exécuté avec PGlite local : propriétaires/éditeurs/lecteurs/extérieurs, isolation, profil et création atomique, compatibilité Nanayé, validation JSON, index SIREN et origine, opposition.
 - La vérification PGlite simule `auth.uid()` et ne valide ni les comptes réels, ni la configuration distante, ni la publication.
+
+Contrôles de production après application du SQL, le 19 octobre 2026 :
+
+- Présence des colonnes, index, fonctions et protections RLS vérifiée.
+- Empreintes des données Nanayé comparées avant et après : identiques. Les nouvelles colonnes additives sont exclues de la comparaison des colonnes d’origine.
+- Publication GitHub Pages confirmée et parcours de création de marque/import vérifié dans le CRM privé en ligne.
+- Contenu importé comparé à l’export source : correspondance exacte, sans fiche manquante ni fiche supplémentaire. Les données privées et les preuves détaillées restent hors du dépôt.
+- Isolation vérifiée sous le rôle authentifié d’un membre exclusivement Nanayé : aucune marque, fiche, adhésion ni activité Opéria visible. La lecture anonyme des fiches est interdite.
+- Recherche officielle contrôlée depuis le site publié et tri des fiches par date de création vérifié. Les résultats de recherche restent limités aux pages chargées.
 
 Références consultées : [JSON et JSONB](https://supabase.com/docs/guides/database/json), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [changements Supabase](https://supabase.com/changelog).
