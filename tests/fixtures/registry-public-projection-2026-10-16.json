@@ -1,0 +1,138 @@
+{
+  "_provenance": {
+    "retrievedAt": "2026-10-16",
+    "source": "https://recherche-entreprises.api.gouv.fr/search?activite_principale=81.21Z%2C81.22Z%2C81.29B&etat_administratif=A&departement=91&page=1&per_page=25&minimal=true&include=siege%2Cmatching_etablissements",
+    "note": "Three public corporate entities selected from the live response; only fields needed for projection regression are retained, without inventing missing departement."
+  },
+  "results": [
+    {
+      "siren": "933096828",
+      "nom_complet": "DESPS (DBG FACILITY)",
+      "date_creation": "2024-09-16",
+      "statut_diffusion": "O",
+      "etat_administratif": "A",
+      "activite_principale": "81.21Z",
+      "tranche_effectif_salarie": "NN",
+      "annee_tranche_effectif_salarie": null,
+      "siege": {
+        "siret": "93309682800027",
+        "departement": "94",
+        "commune": "94028",
+        "code_postal": "94000",
+        "etat_administratif": "A",
+        "statut_diffusion_etablissement": "O",
+        "libelle_commune": "CRETEIL"
+      },
+      "matching_etablissements": [
+        {
+          "siret": "93309682801199",
+          "commune": "91340",
+          "code_postal": "91090",
+          "etat_administratif": "A",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "LISSES"
+        }
+      ]
+    },
+    {
+      "siren": "067800425",
+      "nom_complet": "ONET SERVICES",
+      "date_creation": "1967-01-01",
+      "statut_diffusion": "O",
+      "etat_administratif": "A",
+      "activite_principale": "81.21Z",
+      "tranche_effectif_salarie": "53",
+      "annee_tranche_effectif_salarie": "2024",
+      "siege": {
+        "siret": "06780042503681",
+        "departement": "13",
+        "commune": "13209",
+        "code_postal": "13009",
+        "etat_administratif": "A",
+        "statut_diffusion_etablissement": "O",
+        "libelle_commune": "MARSEILLE"
+      },
+      "matching_etablissements": [
+        {
+          "siret": "06780042501628",
+          "commune": "91432",
+          "code_postal": "91420",
+          "etat_administratif": "F",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "MORANGIS"
+        },
+        {
+          "siret": "06780042502113",
+          "commune": "91666",
+          "code_postal": "91140",
+          "etat_administratif": "F",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "VILLEJUST"
+        },
+        {
+          "siret": "06780042502287",
+          "commune": "91479",
+          "code_postal": "91550",
+          "etat_administratif": "F",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "PARAY VIEILLE POSTE"
+        }
+      ]
+    },
+    {
+      "siren": "428689392",
+      "nom_complet": "SAMSIC 1",
+      "date_creation": "1999-12-22",
+      "statut_diffusion": "O",
+      "etat_administratif": "A",
+      "activite_principale": "81.21Z",
+      "tranche_effectif_salarie": "52",
+      "annee_tranche_effectif_salarie": "2024",
+      "siege": {
+        "siret": "42868939200168",
+        "departement": "35",
+        "commune": "35051",
+        "code_postal": "35510",
+        "etat_administratif": "A",
+        "statut_diffusion_etablissement": "O",
+        "libelle_commune": "CESSON-SEVIGNE"
+      },
+      "matching_etablissements": [
+        {
+          "siret": "42868939200143",
+          "commune": "91228",
+          "code_postal": "91000",
+          "etat_administratif": "A",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "EVRY-COURCOURONNES"
+        },
+        {
+          "siret": "42868939200358",
+          "commune": "91228",
+          "code_postal": "91000",
+          "etat_administratif": "A",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "EVRY-COURCOURONNES"
+        },
+        {
+          "siret": "42868939200077",
+          "commune": "91377",
+          "code_postal": "91300",
+          "etat_administratif": "F",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "MASSY"
+        },
+        {
+          "siret": "42868939200259",
+          "commune": "91228",
+          "code_postal": "91000",
+          "etat_administratif": "F",
+          "statut_diffusion_etablissement": "O",
+          "libelle_commune": "EVRY-COURCOURONNES"
+        }
+      ]
+    }
+  ],
+  "total_results": 4544,
+  "total_pages": 182
+}
