@@ -1,4 +1,4 @@
-import {loadDraft,saveDraft,draftPayload} from './message-drafts.mjs?v=20261015-1';
+import {loadDraft,saveDraft,draftPayload} from './message-drafts.mjs?v=20261112-1';
 import {config} from './config.mjs';
 import {getAuthClient} from './auth.mjs';
 export class RemoteStore {
