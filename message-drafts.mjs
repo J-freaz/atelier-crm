@@ -1,5 +1,7 @@
 export function draftPayload(input){
  const out={};
+ if(input.attach_evjf!=null&&typeof input.attach_evjf!=='boolean')throw Error('Choix de pièce jointe invalide.');
+ out.attach_evjf=input.attach_evjf??false;
  for(const k of ['brand_id','contact_id','subject','body','signature','recipient'])out[k]=String(input[k]??'');
  if(!out.subject.trim()||out.subject.length>300)throw Error('Objet obligatoire, limité à 300 caractères.');
  if(!out.body.trim()||out.body.length>20000)throw Error('Message obligatoire, limité à 20 000 caractères.');
@@ -9,7 +11,12 @@ export function draftPayload(input){
  return out;
 }
 export async function loadDraft(store,brandId,contactId){
- return (await store.request(`crm_message_drafts?brand_id=eq.${encodeURIComponent(brandId)}&contact_id=eq.${encodeURIComponent(contactId)}&select=*&limit=1`))[0]||null;
+ const draft=(await store.request(`crm_message_drafts?brand_id=eq.${encodeURIComponent(brandId)}&contact_id=eq.${encodeURIComponent(contactId)}&select=*&limit=1`))[0]||null;
+ if(!draft||draft.attach_evjf!=null)return draft;
+ // Legacy drafts did not store the checkbox. Recover only an exact unsent preview.
+ const rows=await store.all('crm_mail_outbox',`&brand_id=eq.${encodeURIComponent(brandId)}&contact_id=eq.${encodeURIComponent(contactId)}&status=eq.prepared`);
+ const matches=rows.filter(r=>r.brand_id===brandId&&r.contact_id===contactId&&r.status==='prepared'&&!r.test&&r.subject===draft.subject&&r.body===draft.body&&r.recipient.toLowerCase()===draft.recipient.toLowerCase()).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+ return {...draft,attach_evjf:matches[0]?.attachment==='evjf-v2'};
 }
 export async function saveDraft(store,input){
  const body=draftPayload(input);
