@@ -1,0 +1,11 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {loadDraft} from '../message-drafts.mjs';
+const draft={brand_id:'brand',contact_id:'contact',subject:'Objet',body:'Bonjour',recipient:'a@example.com'};
+const preview={...draft,status:'prepared',attachment:'evjf-v2',created_at:'2026-11-12',test:false};
+const store=(d,rows)=>({request:async()=>[d],all:async()=>rows});
+test('legacy exact prepared PDF is recovered',async()=>assert.equal((await loadDraft(store(draft,[preview]),'brand','contact')).attach_evjf,true));
+test('explicit unchecked choice wins over history',async()=>assert.equal((await loadDraft({request:async()=>[{...draft,attach_evjf:false}],all:()=>{throw Error('must not read history');}},'brand','contact')).attach_evjf,false));
+test('other contacts, brands, messages, archived and sent previews are excluded',async()=>{for(const change of [{contact_id:'other'},{brand_id:'other'},{body:'Other'},{recipient:'other@example.com'},{status:'archived'},{status:'sent'},{test:true}])assert.equal((await loadDraft(store(draft,[{...preview,...change}]),'brand','contact')).attach_evjf,false);});
+test('latest exact preview preserves removal',async()=>assert.equal((await loadDraft(store(draft,[preview,{...preview,created_at:'2026-11-13',attachment:null}]),'brand','contact')).attach_evjf,false));
+test('history failure does not silently discard legacy selection',async()=>{await assert.rejects(()=>loadDraft({request:async()=>[draft],all:async()=>{throw Error('offline');}},'brand','contact'),/offline/);});
