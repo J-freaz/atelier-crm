@@ -100,6 +100,30 @@ test('dossier gagné conservé et montant contractuel requis',()=>{
  assert.throws(()=>readOperiaQualification(formFor({stage:'Gagné',monthlyHtCents:0}),record()),/montant mensuel/);
 });
 
+test('commercial qualification hides finance and win controls while preserving protected values',()=>{
+ const old=record({siren:'123456789',originator:'Apporteur historique',monthlyHtCents:18000}),rights={commercialRestricted:true,canMarkWon:false};
+ const markup=renderOperiaQualification(old,rights);
+ assert.doesNotMatch(markup,/name="operia_(originator|monthlyHt|activityAmount)"/);
+ assert.doesNotMatch(markup,/<option value="(Gagné|Paiement reçu)"/);
+ assert.match(markup,/name="operia_siren"[^>]*readonly/);
+ const form=formFor(old.metadata.operia,{nextAction:'Planifier une démo'});form.delete('operia_originator');form.delete('operia_monthlyHt');
+ const saved=readOperiaQualification(form,old,old,rights);
+ assert.equal(saved.metadata.operia.originator,'Apporteur historique');assert.equal(saved.metadata.operia.monthlyHtCents,18000);assert.equal(saved.metadata.operia.nextAction,'Planifier une démo');
+ for(const [key,value] of [['originator','Moi'],['monthlyHt','99.00'],['siren','987654321'],['stage','Gagné'],['activityKind','Paiement reçu'],['activityAmount','10']]){
+  const altered=new FormData();for(const [name,v]of form)altered.set(name,v);altered.set('operia_'+key,value);
+  assert.throws(()=>readOperiaQualification(altered,old,old,rights));
+ }
+});
+
+test('commercial can append a demo report, keep a validated win and register opposition',()=>{
+ const rights={commercialRestricted:true,canMarkWon:false},old=record({stage:'Gagné',monthlyHtCents:10000,originator:'Historique'});
+ const form=formFor(old.metadata.operia,{activityKind:'Note',activityDate:'2026-01-02',activityNote:'Suivi après démo',activitySource:'Échange client'});form.delete('operia_monthlyHt');form.delete('operia_originator');
+ const saved=readOperiaQualification(form,old,old,rights);assert.equal(saved.metadata.operia.stage,'Gagné');assert.equal(saved.metadata.operia.activities.length,1);assert.equal(saved.metadata.operia.activities[0].amountHtCents,null);
+ form.set('operia_stage','Perdu');assert.throws(()=>readOperiaQualification(form,old,old,rights),/validation/);
+ form.set('operia_stage','Opposition');assert.equal(readOperiaQualification(form,old,old,rights).status,'Ne plus contacter');
+ const editable=renderOperiaQualification(record(),{commercialRestricted:false,canMarkWon:true});assert.match(editable,/<option value="Gagné"/);assert.match(editable,/name="operia_monthlyHt"/);
+});
+
 test('affirmations de besoin ou absence d’outil nécessitent un échange sourcé et daté',()=>{
  assert.throws(()=>readOperiaQualification(formFor({}, {painConfirmed:'on',pain:'Planning manuel'}),record()),/besoin confirmé/);
  assert.throws(()=>readOperiaQualification(formFor({}, {organization:'Aucun logiciel déclaré',fitSource:'Site',fitDate:'2026-01-02',evidenceKind:'Source publique'}),record()),/déclarée par l’entreprise/);

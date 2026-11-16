@@ -1,9 +1,9 @@
 import {loadDraft,saveDraft,draftPayload} from './message-drafts.mjs?v=20261112-1';
-import {config} from './config.mjs';
-import {getAuthClient} from './auth.mjs';
+import {config} from './config.mjs?v=20261116-1';
+import {getAuthClient} from './auth.mjs?v=20261116-1';
 export class RemoteStore {
  constructor(){this.token=null;this.user=null;this.expires=0;this.client=getAuthClient();}
- async session(){if(!this.client)return null;const {data,error}=await this.client.auth.getSession();if(error)throw Error("Connexion Google non finalisée. Réessayez.");if(data.session){this.token=data.session.access_token;this.user=data.session.user;this.expires=data.session.expires_at*1000;}else{this.token=null;this.user=null;this.expires=0;}return data.session;}
+ async session(){if(!this.client)return null;const {data,error}=await this.client.auth.getSession();if(error)throw Error("Connexion non finalisée. Réessayez.");if(data.session){this.token=data.session.access_token;this.user=data.session.user;this.expires=data.session.expires_at*1000;}else{this.token=null;this.user=null;this.expires=0;}return data.session;}
  async login(email,password){const r=await fetch(config.url+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:config.publishableKey,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await r.json();if(!r.ok)throw Error('Connexion refusée. Vérifiez votre compte et votre mot de passe.');this.token=data.access_token;this.expires=Date.now()+data.expires_in*1000;this.user=data.user;return data.user;}
  async request(path,method='GET',body){if(this.client)await this.session();if(!this.token||Date.now()>=this.expires)throw Error('Session expirée. Déconnectez-vous puis reconnectez-vous.');const r=await fetch(config.url+'/rest/v1/'+path,{method,headers:{apikey:config.publishableKey,Authorization:'Bearer '+this.token,'Content-Type':'application/json',Prefer:'return=representation'},body:body===undefined?undefined:JSON.stringify(body)});if(!r.ok)throw Error(r.status===409?'Ce dossier existe déjà ou une relation est invalide.':r.status===403?'Votre rôle ne permet pas cette action.':'Enregistrement impossible. Vérifiez votre connexion et vos droits.');return r.status===204?[]:r.json();}
  async all(table,filter=''){let result=[];for(let offset=0;;offset+=500){const page=await this.request(`${table}?select=*&order=id&limit=500&offset=${offset}${filter}`);result.push(...page);if(page.length<500)return result;}}

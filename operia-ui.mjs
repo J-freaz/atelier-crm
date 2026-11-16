@@ -1,4 +1,5 @@
 import {escapeHTML as e, day, cents} from './domain.mjs';
+import {COMMERCIAL_ACTIVITY_KINDS} from './access.mjs';
 import {OPERIA_STAGES, ORGANIZATIONS, EVIDENCE_KINDS, BUDGETS, ACTIVITY_KINDS, operiaOf, normalizeOperia, qualification, commercialPriority, isExcluded, contactStatusForStage, dateOnly as validatedDate} from './operia-domain.mjs';
 
 export const OPERIA_NAF = Object.freeze({'81.21Z':'Nettoyage courant des bâtiments','81.22Z':'Nettoyage spécialisé et industriel','81.29B':'Autres activités de nettoyage'});
@@ -116,7 +117,8 @@ export function bindOperiaProspection(root,ctx){
  const host=root.querySelector('[data-operia-brand]');if(!host)return ()=>{};
  const id=brandId(ctx),q=s=>host.querySelector(s),listeners=new AbortController();
  let request=null,sequence=0,disposed=false,search=null,results=[],loaded=0,pages=1,total=0,busy=false,cooldown=0,timer=null,reloadSequence=0;
- const rows=[...(ctx.rows||[])],visibleIds=ctx.visibleRows?new Set(ctx.visibleRows.map(r=>r.id)):null,savingSirens=new Set();
+ const permitted=r=>!ctx.canRead||ctx.canRead(r);
+ const rows=[...(ctx.rows||[])].filter(permitted),visibleIds=ctx.visibleRows?new Set(ctx.visibleRows.map(r=>r.id)):null,savingSirens=new Set();
  const active=()=>!disposed&&host.isConnected&&host.dataset.operiaBrand===id;
  const tell=s=>{if(active())q('[data-operia-search-state]').textContent=s;};
  const controls=()=>{if(!active())return;q('[data-operia-submit]').disabled=busy||Date.now()<cooldown;q('[data-operia-cancel]').hidden=!busy;q('[data-operia-next]').hidden=!search||!loaded||loaded>=pages||loaded>=MAX_PAGES;q('[data-operia-next]').disabled=busy||Date.now()<cooldown;};
@@ -155,7 +157,7 @@ export function bindOperiaProspection(root,ctx){
  const refreshData=async()=>{
   const revision=++reloadSequence,snapshot=await ctx.onReload?.();
   if(!active()||revision!==reloadSequence||!snapshot)return;
-  if(Array.isArray(snapshot.rows)){rows.splice(0,rows.length,...snapshot.rows.filter(r=>r.brand_id===id));}
+  if(Array.isArray(snapshot.rows)){rows.splice(0,rows.length,...snapshot.rows.filter(r=>r.brand_id===id&&permitted(r)));}
   if(visibleIds&&Array.isArray(snapshot.visibleRows)){visibleIds.clear();for(const record of snapshot.visibleRows)visibleIds.add(record.id);}
   updateCounts();followup();renderResults();
  };
@@ -179,7 +181,7 @@ export function bindOperiaProspection(root,ctx){
  for(const selector of ['#operia-followup-stage','#operia-followup-sort'])q(selector).addEventListener('change',followup,{signal:listeners.signal});
  host.addEventListener('click',async event=>{
   const button=event.target.closest('button');if(!button||!active())return;
-  if(button.dataset.operiaOpen){ctx.onOpenContact?.(button.dataset.operiaOpen);return;}
+  if(button.dataset.operiaOpen){if(rows.some(r=>r.id===button.dataset.operiaOpen&&permitted(r)))ctx.onOpenContact?.(button.dataset.operiaOpen);return;}
   if(!button.dataset.operiaAdd||!ctx.canEdit||button.disabled)return;
   const c=results.find(r=>r.siren===button.dataset.operiaAdd);if(!c||existingCandidate(rows,c,id)||savingSirens.has(c.siren))return;
   savingSirens.add(c.siren);button.disabled=true;
@@ -204,37 +206,45 @@ function input(label,name,value='',type='text',extra=''){
 function select(label,name,values,value,labels={}){return `<div><label for="operia-f-${name}">${e(label)}</label><select id="operia-f-${name}" name="operia_${name}">${values.map(v=>`<option value="${e(v)}" ${v===value?'selected':''}>${e(labels[v]||v)}</option>`).join('')}</select></div>`;}
 function textarea(label,name,value,extra=''){return `<div class="full"><label for="operia-f-${name}">${e(label)}</label><textarea id="operia-f-${name}" name="operia_${name}" maxlength="2000" ${extra}>${e(value)}</textarea></div>`;}
 
-export function renderOperiaQualification(record,{readonly=false}={}){
+export function renderOperiaQualification(record,{readonly=false,commercialRestricted=false,canMarkWon=true}={}){
  const op=operiaOf(record),qual=qualification(record),excluded=isExcluded(record),fit=op.fit;
+ const availableStages=canMarkWon?OPERIA_STAGES:op.stage==='Gagné'?['Gagné','Opposition']:OPERIA_STAGES.filter(s=>s!=='Gagné');
+ const activityKinds=commercialRestricted?COMMERCIAL_ACTIVITY_KINDS:ACTIVITY_KINDS;
  return `<section class="operia-qualification full"><div class="line"></div><div class="panel-head"><div><div class="eyebrow muted">Opéria / qualification partagée</div><h3>Comprendre l’entreprise avant de proposer</h3></div><span class="badge ${excluded?'alert':''}">${excluded?'Exclue de la prospection':qual.complete?'Qualification complète':'À compléter'}</span></div><p class="note muted">Une création récente est un indice de contexte, jamais la preuve d’un besoin ou de l’absence de logiciel. Les sites ci-dessous sont les chantiers clients ; ils ne sont pas déduits du nombre d’établissements au registre.</p>
  <ul class="operia-checks">${qual.checks.map(c=>`<li class="${c.ok?'done':''}"><span aria-hidden="true">${c.ok?'✓':'○'}</span><span>${e(c.label)}${c.help?`<small>${e(c.help)}</small>`:''}</span></li>`).join('')}</ul>
  <fieldset class="operia-fieldset" ${readonly?'disabled':''}><div class="form-grid">
- ${select('Étape commerciale','stage',OPERIA_STAGES,isOpposed(record)?'Opposition':op.stage)}${input('Apporté par (distinct du responsable)','originator',op.originator,'text','maxlength="200"')}
- <details class="full operia-proof"><summary>Identité et registre officiel</summary><div class="form-grid">${input('SIREN','siren',op.siren,'text','inputmode="numeric" pattern="[0-9]{9}" maxlength="9"')}${input('Date de création de l’entreprise','creationDate',op.creationDate,'date')}${input('Ville','city',op.city,'text','maxlength="150"')}${input('Code NAF','naf',op.naf,'text','maxlength="6"')}
+ ${select('Étape commerciale','stage',availableStages,isOpposed(record)?'Opposition':op.stage)}${commercialRestricted?'<p class="note muted">L’apporteur, les montants et la validation de vente sont gérés par l’administrateur.</p>':input('Apporté par (distinct du responsable)','originator',op.originator,'text','maxlength="200"')}
+ <details class="full operia-proof"><summary>Identité et registre officiel</summary><div class="form-grid">${input('SIREN','siren',op.siren,'text','inputmode="numeric" pattern="[0-9]{9}" maxlength="9"'+(commercialRestricted&&record.id?' readonly':''))}${input('Date de création de l’entreprise','creationDate',op.creationDate,'date')}${input('Ville','city',op.city,'text','maxlength="150"')}${input('Code NAF','naf',op.naf,'text','maxlength="6"')}
  ${select('Statut au registre','registryStatus',['','A','C'],op.registryStatus,{'':'À vérifier','A':'Active','C':'Cessée'})}${input('Registre vérifié le','registryDate',String(op.registryDate||'').slice(0,10),'date')}${input('Source du registre','registrySource',op.registrySource,'url','maxlength="2000"')}${input('Effectif déclaré et année (registre)','employees',op.employees,'text','maxlength="200"')}</div></details>
  <details class="full operia-proof"><summary>Preuves d’activité et coordonnées professionnelles</summary><div class="form-grid">${textarea('Preuve d’activité pertinente (faits observés)','businessEvidence',op.businessEvidence)}${input('Source de cette activité','businessSource',op.businessSource,'url','maxlength="2000"')}${input('Activité vérifiée le','businessDate',String(op.businessDate||'').slice(0,10),'date')}
  ${input('Interlocuteur professionnel','contactName',op.contactName,'text','maxlength="200"')}${input('Fonction de l’interlocuteur','contactRole',op.contactRole,'text','maxlength="200"')}${input('Source des coordonnées professionnelles','contactSource',op.contactSource,'url','maxlength="2000"')}${input('Coordonnées vérifiées le','contactVerifiedAt',String(op.contactVerifiedAt||'').slice(0,10),'date')}</div></details>
  <div class="full"><h3 class="operia-subtitle">Besoin et organisation</h3><p class="note muted">Renseignez ce qui est observé ou confirmé, en conservant la source et la date. Laissez vide ce qui reste inconnu.</p></div>
  ${input('Nombre de sites clients / chantiers','sites',fit.sites,'number','min="0" max="1000000" step="1"')}${input('Nombre d’agents terrain','agents',fit.agents,'number','min="0" max="1000000" step="1"')}${select('Organisation actuelle','organization',ORGANIZATIONS,fit.organization)}${input('Logiciel / outils actuels','tool',fit.tool,'text','maxlength="500"')}${textarea('Difficulté ou besoin exprimé','pain',fit.pain)}
  <div class="full"><label class="checkrow"><input name="operia_painConfirmed" type="checkbox" ${fit.painConfirmed?'checked':''}> Besoin confirmé par l’interlocuteur</label></div>${select('Nature de la preuve','evidenceKind',EVIDENCE_KINDS,fit.kind)}${input('Source / référence de l’échange','fitSource',fit.source,'text','maxlength="2000"')}${input('Date de la preuve','fitDate',String(fit.date||'').slice(0,10),'date')}${select('Budget','budget',BUDGETS,fit.budget)}
- ${textarea('Adéquation Opéria / limites à vérifier','need',op.need)}${textarea('Prochaine action (échéance dans le champ natif du CRM)','nextAction',op.nextAction)}${input('Abonnement envisagé HT par mois (€)','monthlyHt',op.monthlyHtCents===null?'':(op.monthlyHtCents/100).toFixed(2),'text','inputmode="decimal" maxlength="16"')}
+ ${textarea('Adéquation Opéria / limites à vérifier','need',op.need)}${textarea('Prochaine action (échéance dans le champ natif du CRM)','nextAction',op.nextAction)}${commercialRestricted?'':input('Abonnement envisagé HT par mois (€)','monthlyHt',op.monthlyHtCents===null?'':(op.monthlyHtCents/100).toFixed(2),'text','inputmode="decimal" maxlength="16"')}
  </div></fieldset>
  <details class="operia-history"><summary>Historique Opéria (${op.activities.length})</summary>${op.activities.length?`<ol>${op.activities.slice().sort((a,b)=>String(b.at).localeCompare(String(a.at))).map(a=>`<li><strong>${e(a.kind)}</strong> · ${dateLabel(a.at)}<p>${e(a.note||'Sans note')}</p>${a.source?`<p class="note muted">Source : ${e(a.source)}</p>`:''}</li>`).join('')}</ol>`:'<p class="note muted">Aucun échange Opéria enregistré. Les modifications de la fiche restent également dans l’historique d’Atelier CRM.</p>'}</details>
- ${!readonly?`<fieldset class="operia-fieldset"><h3>Ajouter un échange effectué</h3><p class="note muted">Enregistrement manuel uniquement. Ne renseignez que des échanges réellement effectués.</p><div class="form-grid">${select('Type d’échange','activityKind',ACTIVITY_KINDS,'Note')}${input('Date de l’échange','activityDate','','date')}${textarea('Compte rendu (laisser vide pour ne rien ajouter)','activityNote','')}${input('Source / référence de l’échange','activitySource','','text','maxlength="2000"')}${input('Montant encaissé HT (€), uniquement si paiement reçu','activityAmount','','text','inputmode="decimal" maxlength="16"')}</div></fieldset>`:''}</section>`;
+ ${!readonly?`<fieldset class="operia-fieldset"><h3>Ajouter un échange effectué</h3><p class="note muted">Enregistrement manuel uniquement. Ne renseignez que des échanges réellement effectués.</p><div class="form-grid">${select('Type d’échange','activityKind',activityKinds,'Note')}${input('Date de l’échange','activityDate','','date')}${textarea('Compte rendu (laisser vide pour ne rien ajouter)','activityNote','')}${input('Source / référence de l’échange','activitySource','','text','maxlength="2000"')}${commercialRestricted?'':input('Montant encaissé HT (€), uniquement si paiement reçu','activityAmount','','text','inputmode="decimal" maxlength="16"')}</div></fieldset>`:''}</section>`;
 }
 
-export function readOperiaQualification(form,record,originalRecord=record){
+export function readOperiaQualification(form,record,originalRecord=record,{commercialRestricted=false,canMarkWon=true}={}){
  const f=typeof form?.get==='function'?form:new FormData(form),op=operiaOf(record);
  // No qualification fields means an unrelated/native save: leave the metadata alone.
  if(!f.has('operia_stage'))return record;
  const get=name=>text(f.get('operia_'+name),2000);
  const int=name=>{const value=get(name);if(!value)return null;const n=Number(value);if(!/^\d+$/.test(value)||!Number.isSafeInteger(n)||n>1000000)throw Error('Le nombre de sites et d’agents doit être un entier positif.');return n;};
  const updated={...op};
- for(const name of ['siren','creationDate','city','naf','registryStatus','registryDate','registrySource','employees','businessEvidence','businessSource','businessDate','contactName','contactRole','contactSource','contactVerifiedAt','need','nextAction','originator'])updated[name]=get(name);
+ if(commercialRestricted){
+  for(const [field,previous]of [['originator',op.originator],['monthlyHt',op.monthlyHtCents===null?'':(op.monthlyHtCents/100).toFixed(2)],...(originalRecord.id?[['siren',operiaOf(originalRecord).siren]]:[])])if(f.has('operia_'+field)&&get(field)!==previous)throw Error('Ce champ est réservé à l’administrateur.');
+  if(get('activityAmount')||get('activityKind')==='Paiement reçu')throw Error('Les encaissements sont réservés à l’administrateur.');
+ }
+ for(const name of ['siren','creationDate','city','naf','registryStatus','registryDate','registrySource','employees','businessEvidence','businessSource','businessDate','contactName','contactRole','contactSource','contactVerifiedAt','need','nextAction','originator'])updated[name]=commercialRestricted&&name==='originator'?op.originator:get(name);
  if(updated.siren&&!/^\d{9}$/.test(updated.siren))throw Error('Le SIREN doit contenir exactement 9 chiffres.');
  for(const name of ['creationDate','registryDate','businessDate','contactVerifiedAt'])if(updated[name]&&(!dateOnly(updated[name])||updated[name]>day()))throw Error('Les dates de qualification doivent être valides et ne peuvent pas être futures.');
  for(const name of ['registrySource','businessSource','contactSource'])if(updated[name]&&!safeURL(updated[name]))throw Error('Les sources doivent commencer par https:// ou http://.');
  updated.stage=isOpposed(originalRecord)||isOpposed(record)?'Opposition':get('stage');
+ if(!canMarkWon&&updated.stage==='Gagné'&&operiaOf(originalRecord).stage!=='Gagné')throw Error('Seul l’administrateur peut valider un dossier gagné.');
+ if(commercialRestricted&&operiaOf(originalRecord).stage==='Gagné'&&!['Gagné','Opposition'].includes(updated.stage))throw Error('La validation d’un client est réservée à l’administrateur.');
  if(!OPERIA_STAGES.includes(updated.stage))throw Error('L’étape Opéria est invalide.');
  updated.fit={...op.fit,sites:int('sites'),agents:int('agents'),organization:get('organization'),tool:get('tool'),pain:get('pain'),painConfirmed:f.has('operia_painConfirmed'),kind:get('evidenceKind'),source:get('fitSource'),date:get('fitDate'),budget:get('budget')};
  if(updated.fit.painConfirmed&&(!updated.fit.pain||!updated.fit.source||!updated.fit.date||updated.fit.kind!=='Échange avec l’entreprise'))throw Error('Un besoin confirmé nécessite une description, une preuve de type échange avec l’entreprise, une source et la date de l’échange.');
@@ -245,11 +255,11 @@ export function readOperiaQualification(form,record,originalRecord=record){
  const preserveTimestamp=(value,previous)=>value&&String(previous||'').slice(0,10)===value&&/^\d{4}-\d{2}-\d{2}T/.test(previous)&&Number.isFinite(Date.parse(previous))?previous:value;
  for(const name of ['registryDate','businessDate','contactVerifiedAt'])updated[name]=preserveTimestamp(updated[name],op[name]);
  updated.fit.date=preserveTimestamp(updated.fit.date,op.fit.date);
- updated.monthlyHtCents=get('monthlyHt')?cents(get('monthlyHt')):null;
+ updated.monthlyHtCents=commercialRestricted?op.monthlyHtCents:get('monthlyHt')?cents(get('monthlyHt')):null;
  if(updated.stage==='Gagné'&&!(updated.monthlyHtCents>0))throw Error('Renseignez le montant mensuel HT convenu avant de marquer ce dossier gagné.');
  updated.due=record.due_date||'';
  const note=get('activityNote');
- if(note){const at=get('activityDate');if(!dateOnly(at))throw Error('Renseignez la date de l’échange ajouté.');if(at>day())throw Error('Un échange effectué ne peut pas être daté dans le futur.');const kind=get('activityKind');if(!ACTIVITY_KINDS.includes(kind))throw Error('Type d’échange invalide.');if(updated.stage==='Opposition'&&!['Note','Paiement reçu'].includes(kind))throw Error('Une entreprise opposée à la prospection accepte uniquement une note ou un paiement déjà reçu dans ce suivi.');const amount=get('activityAmount');if(kind==='Paiement reçu'&&(!amount||cents(amount)<=0||!get('activitySource')))throw Error('Un paiement reçu nécessite un montant positif et une référence de justificatif.');if(kind!=='Paiement reçu'&&amount)throw Error('Un montant encaissé se renseigne uniquement pour un paiement reçu.');updated.activities=[...op.activities,{id:crypto.randomUUID(),kind,at,note,amountHtCents:amount?cents(amount):null,source:get('activitySource')}];}
+ if(note){const at=get('activityDate');if(!dateOnly(at))throw Error('Renseignez la date de l’échange ajouté.');if(at>day())throw Error('Un échange effectué ne peut pas être daté dans le futur.');const kind=get('activityKind');if(!(commercialRestricted?COMMERCIAL_ACTIVITY_KINDS:ACTIVITY_KINDS).includes(kind))throw Error('Type d’échange invalide.');if(updated.stage==='Opposition'&&!['Note','Paiement reçu'].includes(kind))throw Error('Une entreprise opposée à la prospection accepte uniquement une note ou un paiement déjà reçu dans ce suivi.');const amount=get('activityAmount');if(kind==='Paiement reçu'&&(!amount||cents(amount)<=0||!get('activitySource')))throw Error('Un paiement reçu nécessite un montant positif et une référence de justificatif.');if(kind!=='Paiement reçu'&&amount)throw Error('Un montant encaissé se renseigne uniquement pour un paiement reçu.');updated.activities=[...op.activities,{id:crypto.randomUUID(),kind,at,note,amountHtCents:amount?cents(amount):null,source:get('activitySource')}];}
  const status=updated.stage==='Opposition'?'Ne plus contacter':contactStatusForStage(updated.stage);
  return {...record,status,metadata:{...(record.metadata||{}),operia:normalizeOperia(updated)}};
 }

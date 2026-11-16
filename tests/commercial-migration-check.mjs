@@ -1,0 +1,127 @@
+// Isolated PostgreSQL-compatible database; no remote access. Synthetic identities only.
+// PGLITE_MODULE=/absolute/path/to/pglite/dist/index.js node tests/commercial-migration-check.mjs
+import {readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {emptyOperia} from '../operia-domain.mjs';
+const {PGlite}=await import(process.env.PGLITE_MODULE);
+const db=new PGlite();
+const path=new URL('../',import.meta.url);
+let checks=0;
+const denied=async(fn,pattern)=>{await assert.rejects(fn,pattern);checks++;};
+const equal=(a,b)=>{assert.deepEqual(a,b);checks++;};
+const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const owner=id(1),editor=id(2),viewer=id(3),sales=id(4),otherSales=id(5),outside=id(6),unverified=id(7),operia=id(20),nanaye='db60e148-afb6-4870-9c8e-1c9330706f22',secondOperia=id(22);
+await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;
+create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
+for(const f of ['database/001_crm.sql','database/002_brand_privileges.sql','database/003_reserved_access.sql','database/004_prospect_scan.sql','supabase/migrations/20261015103321_saved_message_drafts.sql','supabase/migrations/20261015114828_gmail_connection.sql','supabase/migrations/20261015141516_gmail_messages.sql','supabase/migrations/20261016140358_mail_preparation_archive.sql','supabase/migrations/20261016162535_operia_profile.sql','supabase/migrations/20261112122439_draft_attachment_choice.sql'])await db.exec(await readFile(new URL(f,path),'utf8'));
+for(const [i,email,verified] of [[owner,'owner@example.test',true],[editor,'editor@example.test',true],[viewer,'viewer@example.test',true],[sales,'sales@example.test',true],[otherSales,'other@example.test',true],[outside,'outside@example.test',true],[unverified,'unverified@example.test',false]])await db.query('insert into auth.users values($1,$2,$3)',[i,email,verified?'2026-01-01':null]);
+await db.query("insert into crm_brands(id,name,profile) values($1,'Opéria test','operia'),($2,'Nanayé test','general'),($3,'Autre Opéria','operia')",[operia,nanaye,secondOperia]);
+for(const brand of [operia,nanaye])for(const [user,role] of [[owner,'owner'],[editor,'editor'],[viewer,'viewer']])await db.query('insert into crm_members(brand_id,user_id,display_name,role) values($1,$2,$3,$4)',[brand,user,role+' fictif',role]);
+await db.query("insert into crm_members(brand_id,user_id,display_name,role) values($1,$2,'Owner fictif','owner')",[secondOperia,owner]);
+const admin=()=>db.exec("reset role;set request.jwt.claim.sub=''");
+const as=async user=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user||'']);await db.exec('set role authenticated');};
+const op=(override={})=>({operia:{...emptyOperia(),...override}});
+const insert=async(record={})=>{const r={brand_id:operia,kind:'contact',name:'Entreprise fictive',status:'À qualifier',metadata:op(),...record};const keys=Object.keys(r);return (await db.query('insert into crm_records('+keys.join(',')+') values('+keys.map((_,i)=>'$'+(i+1)).join(',')+') returning *',keys.map(k=>r[k]))).rows[0];};
+const read=async recordId=>(await db.query('select * from crm_records where id=$1',[recordId])).rows[0];
+const patch=async(recordId,changes)=>{const keys=Object.keys(changes);return (await db.query('update crm_records set '+keys.map((k,i)=>k+'=$'+(i+1)).join(',')+' where id=$'+(keys.length+1)+' returning *',[...keys.map(k=>changes[k]),recordId])).rows;};
+const changeOp=async(recordId,changes)=>{const r=await read(recordId);return patch(recordId,{metadata:{...r.metadata,operia:{...r.metadata.operia,...changes}}});};
+const draft=async(recordId,extra={})=>{const r={brand_id:operia,contact_id:recordId,subject:'Sujet fictif',body:'Message fictif',signature:'Commercial fictif',...extra};const keys=Object.keys(r);return (await db.query('insert into crm_message_drafts('+keys.join(',')+') values('+keys.map((_,i)=>'$'+(i+1)).join(',')+') returning *',keys.map(k=>r[k]))).rows[0];};
+// Existing business rows predate the migration; compare exact snapshots afterwards.
+const ncontact=await insert({brand_id:nanaye,name:'Contact Nanayé fictif',metadata:{}});
+await insert({brand_id:nanaye,kind:'order',name:'Commande Nanayé fictive',status:'En production',metadata:{},amount_cents:45000,paid_cents:15000});
+const baseline=(await db.query('select to_jsonb(r) as value from crm_records r where brand_id=$1 order by id',[nanaye])).rows;
+await db.exec(await readFile(new URL('supabase/migrations/20261116144958_commercial_access.sql',path),'utf8'));
+equal((await db.query('select to_jsonb(r) as value from crm_records r where brand_id=$1 order by id',[nanaye])).rows,baseline);
+await denied(()=>db.query("insert into crm_members(brand_id,user_id,display_name,role) values($1,$2,'No','commercial')",[nanaye,sales]),/Operia brand/);
+await denied(()=>db.query("insert into crm_private.reserved_access(email,brand_id,display_name,role) values('no@example.test',$1,'No','commercial')",[nanaye]),/Operia brand/);
+await db.query("insert into crm_private.reserved_access(email,brand_id,display_name,role) values('sales@example.test',$1,'Commercial fictif','commercial'),('unverified@example.test',$1,'Non vérifié','commercial')",[operia]);
+await db.query("insert into crm_private.reserved_access(email,brand_id,display_name,role,expires_at) values('other@example.test',$1,'Réservation expirée','commercial',now()-interval '1 day')",[operia]);
+await as(unverified);equal((await db.query('select crm_claim_access() as n')).rows[0].n,0);
+await as(outside);equal((await db.query('select crm_claim_access() as n')).rows[0].n,0);
+await as(otherSales);equal((await db.query('select crm_claim_access() as n')).rows[0].n,0);equal((await db.query('select * from crm_members')).rows,[]);
+await as(sales);equal((await db.query('select crm_claim_access() as n')).rows[0].n,1);
+equal((await db.query('select id,profile from crm_brands')).rows,[{id:operia,profile:'operia'}]);
+equal((await db.query('select user_id,role from crm_members')).rows,[{user_id:sales,role:'commercial'}]);
+equal((await db.query('select crm_claim_access() as n')).rows[0].n,0);
+await admin();await db.query("insert into crm_members(brand_id,user_id,display_name,role) values($1,$2,'Autre commercial','commercial')",[operia,otherSales]);
+// Assign fixture records through the administrator, then test a real commercial query surface.
+const paidHistory={id:'old-payment',kind:'Paiement reçu',at:'2026-01-01',note:'Paiement historique',amountHtCents:12000,source:'Ancien suivi'};
+const owned=await insert({name:'Entreprise attribuée',owner_id:sales,notes:'Note historique.',metadata:op({siren:'123456789',originator:'Apport documenté',monthlyHtCents:12000,legacy:{source:'legacy',id:'one'},activities:[paidHistory]})});
+const other=await insert({name:'Autre portefeuille',owner_id:otherSales,metadata:op({siren:'987654321'})});
+const unassigned=await insert({name:'Non attribuée'});
+const archived=await insert({name:'Archivée',owner_id:sales,archived:true});
+const otherbrand=await insert({brand_id:secondOperia,name:'Autre espace',owner_id:owner});
+const linked=await insert({kind:'task',name:'Relance attribuée',status:'À faire',owner_id:sales,related_id:owned.id,metadata:{}});
+const hiddenTask=await insert({kind:'task',name:'Relance liée ailleurs',status:'À faire',owner_id:sales,related_id:other.id,metadata:{}});
+await insert({kind:'deal',name:'Opportunité hors périmètre',status:'À préparer',owner_id:sales,metadata:{}});
+await as(sales);
+equal((await db.query('select id from crm_records order by id')).rows.map(x=>x.id).sort(),[owned.id,linked.id].sort());
+equal((await db.query('select distinct record_id from crm_events')).rows.map(x=>x.record_id).sort(),[owned.id,linked.id].sort());
+for(const unavailable of [other.id,unassigned.id,archived.id,otherbrand.id,ncontact.id,hiddenTask.id])equal(await patch(unavailable,{notes:'Interdit'}),[]);
+equal((await db.query("select crm_private.can_access($1,false) as access,crm_private.can_access($1,true) as write",[operia])).rows[0],{access:false,write:false});
+// Same session / normal REST path supports creation and assigned updates.
+const created=await insert({name:'Création commerciale',metadata:op({siren:'111111111'})});equal(created.owner_id,sales);
+const task=await insert({kind:'task',name:'Nouvelle relance',status:'À faire',related_id:created.id,metadata:{}});equal(task.owner_id,sales);
+equal((await patch(task.id,{name:'Relance renommée',status:'Terminé',due_date:'2026-12-01'}))[0].status,'Terminé');
+equal((await patch(owned.id,{phone:'0100000000',email:'prospect@example.test',website:'https://example.test',notes:'Note historique.\nAppel effectué.',due_date:'2026-12-01'}))[0].phone,'0100000000');
+await changeOp(owned.id,{need:'Coordination à clarifier',stage:'Démo planifiée',fit:{sites:3,agents:5,organization:'Inconnue',painConfirmed:false}});
+const note={id:'new-note',kind:'Appel effectué',at:'2026-01-02',note:'Échange déclaré',amountHtCents:null,source:'Appel'};
+await changeOp(owned.id,{activities:[paidHistory,note]});equal((await read(owned.id)).metadata.operia.activities.length,2);
+// Protect owner, identity, provenance, finance and lifecycle even for direct API writes.
+for(const changes of [{owner_id:otherSales},{owner_id:null},{name:'Identité remplacée'},{source:'Source remplacée'},{amount_cents:100},{paid_cents:1},{quantity:2},{archived:true},{version:500},{created_at:'2000-01-01'},{notes:'Réécriture'}])await denied(()=>patch(owned.id,changes));
+for(const changes of [{siren:'222222222'},{originator:'Moi'},{monthlyHtCents:999},{legacy:{}},{schemaVersion:2},{unexpectedFinance:100},{activities:[]},{activities:[{...paidHistory,amountHtCents:1},note]},{activities:[note,paidHistory]},{stage:'Gagné'}])await denied(()=>changeOp(owned.id,changes));
+await denied(()=>patch(owned.id,{status:'Client'}),/owner validation/);
+await denied(()=>patch(task.id,{related_id:owned.id}));
+await denied(()=>patch(task.id,{metadata:{hidden:'x'}}));
+for(const extra of [{kind:'Paiement reçu',amountHtCents:100},{kind:'Note',amountHtCents:0},{kind:'Note',extra:'hidden'},{id:'new-note',kind:'Note'},{kind:'Note',at:'2999-01-01'},{kind:'Note',at:'-infinity'}])await denied(()=>changeOp(owned.id,{activities:[paidHistory,note,{id:'attempt',kind:'Note',at:'2026-01-03',note:'Test',amountHtCents:null,...extra}]}));
+for(const r of [{owner_id:otherSales},{brand_id:nanaye,metadata:{}},{brand_id:secondOperia},{kind:'deal',status:'À préparer',metadata:{}},{amount_cents:100},{quantity:2},{archived:true},{status:'Client'},{metadata:op({stage:'Gagné'})},{metadata:op({originator:'Inventé'})},{metadata:op({monthlyHtCents:100})},{metadata:op({legacy:{source:'copied'}})},{metadata:{operia:emptyOperia(),other:'x'}},{related_id:other.id}])await denied(()=>insert(r));
+await denied(()=>insert({kind:'task',status:'À faire',metadata:{},related_id:other.id}));
+await denied(()=>db.query('delete from crm_records where id=$1',[created.id]),/permission denied/);
+// SQL grants and auth.uid-backed membership are not replaceable by editable claims.
+await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:sales,user_metadata:{role:'owner',brand_id:nanaye}})]);
+equal((await db.query('select id from crm_brands')).rows,[{id:operia}]);
+await denied(()=>db.query("update crm_members set role='owner' where user_id=$1",[sales]),/permission denied/);
+await denied(()=>db.query("insert into crm_members(brand_id,user_id,display_name,role) values($1,$2,'Self','owner')",[nanaye,sales]),/permission denied/);
+await denied(()=>db.query('select * from crm_private.reserved_access'),/permission denied/);
+await denied(()=>db.query("select crm_create_profiled_brand('No','operia')"),/Owner required/);
+await denied(()=>db.query("select crm_set_brand_profile($1,'general')",[operia]),/Brand owner required/);
+await denied(()=>db.query('select crm_reserve_scan($1)',[owned.id]),/Contact inaccessible/);
+await denied(()=>db.query("select crm_mail_internal('token',$1)",[sales]),/permission denied/);
+// Saved drafts use the latest attachment column and retain actor/version safeguards.
+const d=await draft(owned.id,{attach_evjf:false,created_by:owner,updated_by:owner});equal(d.created_by,sales);equal(d.updated_by,sales);
+const d2=(await db.query("update crm_message_drafts set body='Version commerciale deux',version=99,updated_by=$1 where id=$2 returning *",[owner,d.id])).rows[0];equal(d2.version,2);equal(d2.updated_by,sales);
+equal((await db.query('select actor_id from crm_events where record_id=$1 and action=$2 order by created_at',[owned.id,'Brouillon enregistré (aucun envoi)'])).rows.map(x=>x.actor_id),[sales,sales]);
+for(const target of [other.id,unassigned.id,archived.id,otherbrand.id,ncontact.id,task.id])await denied(()=>draft(target));
+await denied(()=>db.query('update crm_message_drafts set attach_evjf=true where id=$1',[d.id]),/EVJF attachment/);
+await denied(()=>db.query('update crm_message_drafts set contact_id=$1 where id=$2',[other.id,d.id]));
+await denied(()=>db.query('delete from crm_message_drafts where id=$1',[d.id]),/permission denied/);
+// Owner reassigns the portfolio: the former salesperson immediately loses rows, drafts and events.
+await as(owner);await patch(owned.id,{owner_id:otherSales});
+await as(sales);equal(await read(owned.id),undefined);equal(await read(linked.id),undefined);equal((await db.query('select * from crm_message_drafts where id=$1',[d.id])).rows,[]);equal((await db.query('select * from crm_events where record_id in ($1,$2)',[owned.id,linked.id])).rows,[]);
+await as(owner);await patch(owned.id,{owner_id:sales});
+// Won financial decisions remain editable for pre-existing editor, not the new role.
+await as(editor);await changeOp(owned.id,{stage:'Gagné'});await patch(owned.id,{status:'Client'});
+await as(sales);await patch(owned.id,{notes:(await read(owned.id)).notes+'\nSuivi client.'});
+await denied(()=>changeOp(owned.id,{stage:'En échange'}),/protected/);
+await denied(()=>patch(owned.id,{status:'À qualifier'}),/protected/);
+await denied(()=>db.query("update crm_message_drafts set body='Prospection gagnée' where id=$1",[d.id]),/Active prospect/);
+await changeOp(owned.id,{stage:'Opposition'});equal((await read(owned.id)).status,'Ne plus contacter');
+await denied(()=>changeOp(owned.id,{activities:[paidHistory,note,{id:'optout-call',kind:'Appel effectué',at:'2026-01-03',note:'Nouvelle prospection',amountHtCents:null}]}),/Only notes/);
+await changeOp(owned.id,{activities:[paidHistory,note,{id:'optout-note',kind:'Note',at:'2026-01-03',note:'Opposition confirmée',amountHtCents:null}]});
+await denied(()=>patch(owned.id,{status:'À qualifier',metadata:op()}));
+await denied(()=>db.query("update crm_message_drafts set body='Prospection opposée' where id=$1",[d.id]),/Active prospect/);
+// General brands and legacy editor/viewer permissions are unchanged.
+await as(editor);await patch(ncontact.id,{notes:'Modification editor Nanayé',owner_id:owner});
+const nd=await draft(ncontact.id,{brand_id:nanaye,attach_evjf:true});equal(nd.attach_evjf,true);
+await as(viewer);equal((await db.query('select id from crm_message_drafts where id=$1',[nd.id])).rows,[{id:nd.id}]);equal((await db.query("update crm_message_drafts set body='No' where id=$1 returning id",[nd.id])).rows,[]);
+await denied(()=>insert({brand_id:nanaye,metadata:{}}),/row-level security/);
+await as(outside);equal((await db.query('select * from crm_brands')).rows,[]);equal((await db.query('select * from crm_records')).rows,[]);equal((await db.query('select * from crm_events')).rows,[]);equal((await db.query('select * from crm_message_drafts')).rows,[]);
+await admin();await denied(()=>db.query("update crm_brands set profile='general' where id=$1",[operia]),/commercial memberships/);
+await db.exec('set role service_role');
+await denied(()=>db.query("select crm_mail_internal('token',$1)",[sales]),/Editor required/);
+await denied(()=>db.query("select crm_gmail_internal('status',$1)",[sales]),/Membership required/);
+await db.exec('reset role;set role anon');await denied(()=>db.query('select * from crm_records'),/permission denied/);
+await denied(()=>db.query('select crm_private.is_commercial($1)',[operia]),/permission denied/);
+await db.close();console.log(`Commercial SQL: ${checks} assertions passed; assigned portfolio, protected changes, drafts, claim, legacy roles and Nanayé isolation.`);

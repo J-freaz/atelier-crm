@@ -1,7 +1,8 @@
 import {escapeHTML as e,validate} from './domain.mjs';
 import {planLegacyImport,operiaOf,isExcluded,isOperiaBrand} from './operia-domain.mjs';
 
-export function exportOperiaBackup(brand,data){
+export function exportOperiaBackup(brand,data,{role}={}){
+ if(!['owner','editor','viewer'].includes(role))throw Error('La sauvegarde est réservée à l’équipe habilitée.');
  if(!isOperiaBrand(brand))throw Error('Sélectionnez un espace Opéria.');
  const value={format:'atelier-operia-backup-v1',exportedAt:new Date().toISOString(),brand,
   records:data.records.filter(r=>r.brand_id===brand.id),events:data.events.filter(r=>r.brand_id===brand.id)};
@@ -9,7 +10,8 @@ export function exportOperiaBackup(brand,data){
  const a=document.createElement('a');a.href=url;a.download='atelier-operia-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(url);
 }
 
-export function openOperiaImport({dialog,brand,records,user,store,onDone,isCurrent}){
+export function openOperiaImport({dialog,brand,records,user,store,onDone,isCurrent,role}){
+ if(!['owner','editor'].includes(role))throw Error('L’import est réservé à l’équipe habilitée.');
  if(!isOperiaBrand(brand))throw Error('Sélectionnez un espace Opéria.');
  dialog.innerHTML=`<h2>Reprendre l’ancien outil Opéria</h2><p>Destination : <strong>${e(brand.name)}</strong>. Les fiches, sources, dates et actions de l’ancien export seront conservées. Les doublons ne sont pas écrasés.</p><label for="operia-file">Sauvegarde JSON de l’ancien outil</label><input id="operia-file" type="file" accept=".json,application/json"><p class="note">Ce fichier est lu dans votre navigateur. L’enregistrement dans cet espace privé intervient après vérification. Aucun message n’est envoyé.</p><div id="operia-preview"></div><p id="operia-import-error" class="error" role="status"></p><div class="form-footer"><button id="operia-close">Fermer</button><button id="operia-confirm" class="primary" disabled>Importer dans cet espace</button></div>`;
  dialog.showModal();const q=id=>dialog.querySelector('#'+id);let plan=null,running=false;
@@ -43,8 +45,9 @@ export function buildOperiaDraft(record,sender){
  body:`Bonjour,\n\n${observed}Je vous contacte au sujet d’Opéria, une solution de suivi des sites, des équipes et des signalements pour les entreprises de propreté.\n\nComment gérez-vous actuellement les plannings et le suivi des prestations ? Si ce sujet vous concerne, nous pouvons organiser un court échange, puis une démonstration adaptée à votre organisation. Le périmètre et les options seront précisés ensemble.\n\n${sender}\n[Organisation représentée et coordonnées à compléter]\n\n${o.contactSource?'Source des coordonnées professionnelles : '+o.contactSource+'\n':''}[Information sur le traitement des données et exercice des droits à compléter]\nSi vous ne souhaitez pas être recontacté, indiquez-le simplement en réponse.`};
 }
 
-export async function openOperiaDraft({dialog,record,brand,members,user,store,demo,canEdit,back,isCurrent=()=>true}){
+export async function openOperiaDraft({dialog,record,brand,members,user,store,demo,canEdit,back,isCurrent=()=>true,access}){
  if(isExcluded(record)||operiaOf(record).registryStatus==='C')throw Error('Ce dossier est exclu de la prospection.');
+ if(access&&!access.canRead(record))throw Error('Ce dossier ne fait pas partie de votre accès.');
  const team=members.filter(m=>m.brand_id===brand.id),sender=team.find(m=>m.user_id===user.id)?.display_name||'Votre nom';
  let saved=await store.loadDraft(brand.id,record.id),saving=false;
  if(!isCurrent())return;
@@ -58,5 +61,15 @@ export async function openOperiaDraft({dialog,record,brand,members,user,store,de
  q('op-reviewed').onchange=()=>{q('op-copy').disabled=!q('op-reviewed').checked;};
  for(const id of ['op-recipient','op-signature','op-subject','op-body'])q(id).oninput=()=>{q('op-reviewed').checked=false;q('op-copy').disabled=true;};
  q('op-copy').onclick=async()=>{try{await navigator.clipboard.writeText('Objet : '+q('op-subject').value+'\n\n'+q('op-body').value);q('op-draft-state').textContent='Copié. Aucun message envoyé.';}catch{q('op-draft-state').textContent='Sélectionnez le texte pour le copier.';}};
- if(q('op-save'))q('op-save').onclick=async()=>{if(saving)return;saving=true;q('op-save').disabled=true;const captured=snapshot();try{saved=await store.saveDraft({...JSON.parse(captured),brand_id:brand.id,contact_id:record.id,id:saved?.id,version:saved?.version});baseline=captured;q('op-draft-state').textContent='Brouillon enregistré. Aucun message envoyé.';}catch(err){q('op-draft-state').textContent=err.message;}finally{saving=false;if(q('op-save'))q('op-save').disabled=false;}};
+ const saveButton=q('op-save'),draftState=q('op-draft-state');
+ if(saveButton)saveButton.onclick=async()=>{
+  if(saving||dialog.open===false||saveButton.isConnected===false)return;
+  saving=true;saveButton.disabled=true;const captured=snapshot();
+  try{
+   if(access&&!access.canEdit(record))throw Error('Votre accès à ce dossier a changé. Rouvrez la fiche.');
+   saved=await store.saveDraft({...JSON.parse(captured),brand_id:brand.id,contact_id:record.id,id:saved?.id,version:saved?.version});
+   baseline=captured;if(draftState.isConnected!==false)draftState.textContent='Brouillon enregistré. Aucun message envoyé.';
+  }catch(err){if(draftState.isConnected!==false)draftState.textContent=err.message;}
+  finally{saving=false;saveButton.disabled=false;}
+ };
 }
