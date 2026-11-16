@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261116-1';
+import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
 
 function fixture(options={}){
  const nodes={};
- for(const key of ['address-form','address','request','code-form','code','verify','resend','change','status','error'])nodes[key]={value:'',textContent:'',hidden:false,disabled:false,focus(){this.focused=true;}};
+ for(const key of ['address-form','address','request','existing','code-form','code','verify','resend','change','status','error'])nodes[key]={value:'',textContent:'',hidden:false,disabled:false,focus(){this.focused=true;}};
  let clock=0,id=0;const timers=new Map(),calls=[];
  const root={querySelector:selector=>nodes[selector.replace('#email-login-','')]};
- const cleanup=bindEmailLogin({root,enabled:true,onAuthenticated:async()=>calls.push(['resume']),requestCode:async email=>{calls.push(['request',email]);},verifyCode:async(email,code)=>{calls.push(['verify',email,code]);return {user:{id:'test-user'}};},now:()=>clock,setTimer:fn=>{timers.set(++id,fn);return id;},clearTimer:key=>timers.delete(key),...options});
+ const cleanup=bindEmailLogin({root,enabled:true,otpLength:6,onAuthenticated:async()=>calls.push(['resume']),requestCode:async email=>{calls.push(['request',email]);},verifyCode:async(email,code)=>{calls.push(['verify',email,code]);return {user:{id:'test-user'}};},now:()=>clock,setTimer:fn=>{timers.set(++id,fn);return id;},clearTimer:key=>timers.delete(key),...options});
  const submit=key=>nodes[key].onsubmit?.({preventDefault(){}});
  return {nodes,calls,timers,cleanup,submit,advance(ms){clock+=ms;const pending=[...timers.values()];timers.clear();for(const fn of pending)fn();}};
 }
@@ -19,8 +19,86 @@ test('disabled email login renders nothing and binds no network handlers',()=>{
  const cleanup=bindEmailLogin({enabled:false,root:{querySelector(){touched=true;}},requestCode:()=>{throw Error('Unexpected request');}});
  cleanup();assert.equal(touched,false);
  assert.match(emailLoginMarkup({enabled:true}),/autocomplete="one-time-code"/);
- assert.match(emailLoginMarkup({enabled:true}),/pattern="\[0-9\]\{6\}"/);
+ assert.match(emailLoginMarkup({enabled:true}),/pattern="\[0-9\]\{8\}"/);
+ assert.match(emailLoginMarkup({enabled:true}),/id="email-login-existing" type="button">J’ai déjà un code/);
+ assert.match(emailLoginMarkup({enabled:true,otpLength:6}),/pattern="\[0-9\]\{6\}"/);
  assert.match(emailLoginMarkup({enabled:true,otpLength:10}),/maxlength="10"/);
+});
+
+test('an existing code validates and captures its address without requesting any email',async()=>{
+ const f=fixture({otpLength:8});
+ try{
+  f.nodes.address.value='invalid';f.nodes.existing.onclick();
+  assert.equal(f.nodes['code-form'].hidden,true);assert.match(f.nodes.error.textContent,/adresse e-mail valide/);
+  assert.deepEqual(f.calls,[]);
+  f.nodes.address.value=' Person@Example.com ';f.nodes.existing.onclick();
+  assert.equal(f.nodes.address.value,'person@example.com');assert.equal(f.nodes.address.disabled,true);
+  assert.equal(f.nodes['code-form'].hidden,false);assert.equal(f.nodes.code.focused,true);
+  assert.equal(f.nodes.existing.disabled,true);assert.equal(f.nodes.error.textContent,'');
+  assert.match(f.nodes.status.textContent,/Saisissez le code reçu/);assert.deepEqual(f.calls,[]);
+  // Even a scripted edit cannot change the email bound to the current challenge.
+  f.nodes.address.value='other@example.com';f.nodes.existing.onclick();
+  f.nodes.code.value='123456';await f.submit('code-form');assert.deepEqual(f.calls,[]);
+  f.nodes.code.value='12345678';await f.submit('code-form');
+  assert.deepEqual(f.calls,[['verify','person@example.com','12345678'],['resume']]);
+  assert.equal(f.nodes.code.value,'');assert.equal(f.nodes.existing.disabled,true);
+ }finally{f.cleanup();}
+});
+
+test('existing-code entry preserves resend cooldown while allowing verification',async()=>{
+ const f=fixture();
+ try{
+  f.nodes.address.value='person@example.com';await f.submit('address-form');f.advance(10000);
+  f.nodes.change.onclick();f.nodes.address.value='another@example.com';f.nodes.existing.onclick();
+  assert.equal(f.nodes.resend.disabled,true);assert.match(f.nodes.resend.textContent,/50 s/);
+  assert.equal(f.nodes.verify.disabled,false);await f.nodes.resend.onclick();
+  assert.deepEqual(f.calls,[['request','person@example.com']]);
+  f.nodes.code.value='123456';await f.submit('code-form');
+  assert.deepEqual(f.calls,[['request','person@example.com'],['verify','another@example.com','123456'],['resume']]);
+ }finally{f.cleanup();}
+});
+
+test('changing to an existing code cannot bypass verification rate limits',async()=>{
+ let verifications=0;
+ const f=fixture({verifyCode:async()=>{verifications++;throw Object.assign(new Error('private'),{code:'ATELIER_RATE_LIMITED'});}});
+ try{
+  f.nodes.address.value='person@example.com';f.nodes.existing.onclick();f.nodes.code.value='123456';await f.submit('code-form');
+  f.nodes.change.onclick();f.nodes.address.value='another@example.com';f.nodes.existing.onclick();
+  assert.equal(f.nodes.code.disabled,true);assert.equal(f.nodes.verify.disabled,true);assert.equal(f.nodes.resend.disabled,true);
+  f.nodes.code.value='123456';await f.submit('code-form');await f.nodes.resend.onclick();
+  assert.equal(verifications,1);assert.deepEqual(f.calls,[]);
+  f.advance(60000);assert.equal(f.nodes.verify.disabled,false);assert.equal(f.nodes.resend.disabled,false);
+  await f.submit('code-form');assert.equal(verifications,2);
+ }finally{f.cleanup();}
+});
+
+test('existing-code entry cannot replace a pending request or verification',async()=>{
+ const pending=deferred(),f=fixture({requestCode:()=>pending.promise});
+ try{
+  f.nodes.address.value='person@example.com';const request=f.submit('address-form');
+  f.nodes.address.value='other@example.com';f.nodes.existing.onclick();
+  assert.equal(f.nodes.existing.disabled,true);assert.equal(f.nodes['code-form'].hidden,true);
+  pending.resolve({});await request;
+  assert.equal(f.nodes.address.value,'person@example.com');
+  f.nodes.code.value='123456';await f.submit('code-form');
+  assert.deepEqual(f.calls,[['verify','person@example.com','123456'],['resume']]);
+ }finally{f.cleanup();}
+ const pendingVerify=deferred(),v=fixture({verifyCode:(email,code)=>{v.calls.push(['verify',email,code]);return pendingVerify.promise;}});
+ try{
+  v.nodes.address.value='person@example.com';v.nodes.existing.onclick();v.nodes.code.value='123456';const verification=v.submit('code-form');
+  v.nodes.address.value='other@example.com';v.nodes.existing.onclick();v.nodes.change.onclick();
+  assert.equal(v.nodes.existing.disabled,true);assert.equal(v.nodes['code-form'].hidden,false);
+  pendingVerify.resolve({user:{id:'test-user'}});await verification;
+  assert.deepEqual(v.calls,[['verify','person@example.com','123456'],['resume']]);
+ }finally{v.cleanup();}
+});
+
+test('cleanup removes existing-code entry and ignores a retained handler',()=>{
+ const f=fixture(),useExisting=f.nodes.existing.onclick;
+ f.nodes.address.value='person@example.com';f.cleanup();
+ assert.equal(f.nodes.existing.onclick,null);assert.equal(f.nodes.address.value,'');
+ f.nodes.address.value='other@example.com';useExisting();
+ assert.equal(f.nodes['code-form'].hidden,true);assert.deepEqual(f.calls,[]);assert.equal(f.timers.size,0);
 });
 
 test('request validates email, reveals code entry and prevents resend during 60 seconds',async()=>{

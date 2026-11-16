@@ -7,7 +7,7 @@ import * as access from '../access.mjs';
 import * as operiaDomain from '../operia-domain.mjs';
 import * as operiaUI from '../operia-ui.mjs';
 import * as workflow from '../operia-workflow.mjs';
-import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs';
+import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
 const source=(await readFile(new URL('../app.mjs',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/^login\(\);$/m,'').replace(/^resumeGoogle\(\);$/m,'');
 const dataset=(id='sales')=>({brands:[{id:'op',name:id==='demo'?'Démonstration fictive':'Espace privé fictif',profile:'operia'}],members:[{brand_id:'op',user_id:id,role:'commercial',display_name:'Utilisateur fictif'}],records:[],events:[]});
 function setup(){
@@ -18,14 +18,25 @@ function setup(){
  class DemoStore{constructor(){this.user={id:'demo'};}async load(){return dataset('demo');}async logout(){}}
  const dependencies={...domain,...access,...operiaDomain,...operiaUI,...workflow,e:domain.escapeHTML,document,FormData:window.FormData,AbortController:window.AbortController,location:window.location,history:window.history,config:{googleEnabled:true,emailOtpEnabled:true},setTimeout:()=>0,RemoteStore,DemoStore,
   googleSignIn:async()=>{state.google++;if(state.googleFail)throw Error('Google fictif indisponible');},
-  emailLoginMarkup:()=>emailLoginMarkup({enabled:true,otpLength:6}),
-  bindEmailLogin:options=>bindEmailLogin({...options,enabled:true,otpLength:6,requestCode:async()=>{state.codesRequested++;},verifyCode:async()=>{state.codesVerified++;return {user:{id:'sales'}};},setTimer:()=>1,clearTimer:()=>{}})};
+  emailLoginMarkup:()=>emailLoginMarkup({enabled:true,otpLength:8}),
+  bindEmailLogin:options=>bindEmailLogin({...options,enabled:true,otpLength:8,requestCode:async()=>{state.codesRequested++;},verifyCode:async()=>{state.codesVerified++;return {user:{id:'sales'}};},setTimer:()=>1,clearTimer:()=>{}})};
  const app=new Function('dependencies',`const {${Object.keys(dependencies).join(',')}}=dependencies;${source}\nreturn {login,resumeAuthenticated,resumeGoogle,state:()=>({demo,user,brand,data,store})};`)(dependencies);app.login();
  const q=id=>document.getElementById(id),event=target=>({preventDefault(){},target});
  const request=async()=>{q('email-login-address').value='commercial@example.test';await q('email-login-address-form').onsubmit(event(q('email-login-address-form')));};
- const verify=()=>{q('email-login-code').value='123456';return q('email-login-code-form').onsubmit(event(q('email-login-code-form')));};
+ const verify=()=>{q('email-login-code').value='12345678';return q('email-login-code-form').onsubmit(event(q('email-login-code-form')));};
  return {app,state,document,q,request,verify,close:()=>window.happyDOM.close()};
 }
+test('an existing eight-digit code opens the CRM without requesting another email',async()=>{
+ const t=setup();try{
+  t.q('email-login-address').value='commercial@example.test';t.q('email-login-existing').click();
+  assert.equal(t.q('email-login-code-form').hidden,false);assert.equal(t.state.codesRequested,0);
+  assert.equal(t.q('email-login-code').maxLength,8);
+  const oldButton=t.q('email-login-existing'),oldAddress=t.q('email-login-address');await t.verify();
+  assert.deepEqual(t.state.calls,['session','claim','load']);assert.equal(t.state.codesRequested,0);assert.equal(t.state.codesVerified,1);
+  assert.equal(t.app.state().user.id,'sales');assert.equal(t.q('email-login'),null);
+  assert.equal(oldButton.onclick,null);assert.equal(oldAddress.value,'');
+ }finally{await t.close();}
+});
 for(const failure of ['claim','load'])test('app email login retries after '+failure+' failure without verifying the code twice',async()=>{
  const t=setup();try{
   t.state.fail=failure;await t.request();await t.verify();

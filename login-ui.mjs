@@ -1,5 +1,5 @@
-import {config} from './config.mjs?v=20261116-1';
-import {requestEmailCode,verifyEmailCode,emailAuthErrorMessage,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength} from './auth.mjs?v=20261116-1';
+import {config} from './config.mjs?v=20261116-2';
+import {requestEmailCode,verifyEmailCode,emailAuthErrorMessage,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength} from './auth.mjs?v=20261116-2';
 
 export function emailLoginMarkup({enabled=config.emailOtpEnabled,otpLength=emailOtpLength()}={}){
  if(!enabled)return '';
@@ -8,7 +8,8 @@ export function emailLoginMarkup({enabled=config.emailOtpEnabled,otpLength=email
  <h3>Connexion par e-mail</h3><p class="note muted">Pour les personnes disposant déjà d’un accès au CRM.</p>
  <form id="email-login-address-form"><label for="email-login-address">Adresse e-mail</label>
  <input id="email-login-address" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required>
- <button id="email-login-request" type="submit">Recevoir un code de connexion</button></form>
+ <button id="email-login-request" type="submit">Recevoir un code de connexion</button>
+ <button id="email-login-existing" type="button">J’ai déjà un code</button></form>
  <form id="email-login-code-form" hidden><label for="email-login-code">Code reçu par e-mail</label>
  <input id="email-login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{${length}}" minlength="${length}" maxlength="${length}" aria-describedby="email-login-status" required>
  <button class="primary" id="email-login-verify" type="submit">Se connecter</button>
@@ -22,7 +23,7 @@ export function emailLoginMarkup({enabled=config.emailOtpEnabled,otpLength=email
 export function bindEmailLogin({root=globalThis.document,enabled=config.emailOtpEnabled,onAuthenticated,requestCode=requestEmailCode,verifyCode=verifyEmailCode,otpLength=emailOtpLength(),now=()=>Date.now(),setTimer=(fn,ms)=>setTimeout(fn,ms),clearTimer=id=>clearTimeout(id)}={}){
  if(!enabled)return ()=>{};
  const nodes={};
- for(const key of ['address-form','address','request','code-form','code','verify','resend','change','status','error']){
+ for(const key of ['address-form','address','request','existing','code-form','code','verify','resend','change','status','error']){
   nodes[key]=root?.querySelector(`#email-login-${key}`);
   if(!nodes[key])throw Error('Le formulaire de connexion par e-mail est incomplet.');
  }
@@ -38,6 +39,7 @@ export function bindEmailLogin({root=globalThis.document,enabled=config.emailOtp
   nodes.address.disabled=busy||!!challengeEmail||authenticated;
   nodes.request.disabled=busy||!!challengeEmail||authenticated||requestWait>0;
   nodes.request.textContent=requestWait?`Réessayer dans ${requestWait} s`:'Recevoir un code de connexion';
+  nodes.existing.disabled=busy||!!challengeEmail||authenticated;
   nodes['code-form'].hidden=!challengeEmail;
   nodes.code.disabled=busy||authenticated||verifyWait>0;
   nodes.verify.disabled=busy||completed||verifyWait>0;
@@ -49,6 +51,15 @@ export function bindEmailLogin({root=globalThis.document,enabled=config.emailOtp
  }
  function showError(error,phase){nodes.error.textContent=emailAuthErrorMessage(error,phase);}
  function rateLimit(error){if(error?.code==='ATELIER_RATE_LIMITED'){nextRequestAt=now()+60000;nextVerifyAt=now()+60000;}}
+ function useExistingCode(){
+  if(!active()||busy||authenticated||challengeEmail)return;
+  const email=normalizeLoginEmail(nodes.address.value);
+  nodes.error.textContent='';
+  if(!validLoginEmail(email)){showError({code:'ATELIER_INVALID_EMAIL'});nodes.address.focus();return;}
+  challengeEmail=email;nodes.address.value=email;nodes.code.value='';
+  nodes.status.textContent='Saisissez le code reçu par e-mail.';
+  draw();if(!nodes.code.disabled)nodes.code.focus();
+ }
  async function sendCode(event){
   event?.preventDefault();
   if(!active()||busy||authenticated||secondsUntil(nextRequestAt))return;
@@ -101,6 +112,7 @@ export function bindEmailLogin({root=globalThis.document,enabled=config.emailOtp
   challengeEmail='';nodes.code.value='';nodes.status.textContent='';nodes.error.textContent='';draw();nodes.address.focus();
  }
  nodes['address-form'].onsubmit=sendCode;
+ nodes.existing.onclick=useExistingCode;
  nodes['code-form'].onsubmit=verify;
  nodes.resend.onclick=sendCode;
  nodes.change.onclick=changeEmail;
@@ -108,7 +120,7 @@ export function bindEmailLogin({root=globalThis.document,enabled=config.emailOtp
  return ()=>{
   if(disposed)return;
   disposed=true;if(timer!==null)clearTimer(timer);timer=null;
-  nodes['address-form'].onsubmit=null;nodes['code-form'].onsubmit=null;nodes.resend.onclick=null;nodes.change.onclick=null;
+  nodes['address-form'].onsubmit=null;nodes['code-form'].onsubmit=null;nodes.existing.onclick=null;nodes.resend.onclick=null;nodes.change.onclick=null;
   nodes.code.value='';nodes.address.value='';challengeEmail='';
  };
 }

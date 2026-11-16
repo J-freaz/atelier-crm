@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {config} from '../config.mjs?v=20261116-1';
-import {createEmailOtpAuth,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength,emailAuthErrorMessage,getAuthClient,googleSignIn} from '../auth.mjs?v=20261116-1';
-import {bindEmailLogin} from '../login-ui.mjs?v=20261116-1';
-import {RemoteStore} from '../store.mjs?v=20261116-1';
+import {config} from '../config.mjs?v=20261116-2';
+import {createEmailOtpAuth,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength,emailAuthErrorMessage,getAuthClient,googleSignIn} from '../auth.mjs?v=20261116-2';
+import {bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
+import {RemoteStore} from '../store.mjs?v=20261116-2';
 
 const session={user:{id:'test-user'},access_token:'test-session-token',expires_at:Math.floor(Date.now()/1000)+3600};
 function fakeClient(){
@@ -28,12 +28,13 @@ test('normalizes email and validates the configured numeric OTP before the provi
  assert.equal(normalizeLoginEmail(' Person@Example.com '),'person@example.com');
  for(const email of ['',null,'person','a@b','a b@example.com','a@@example.com',`${'a'.repeat(250)}@example.com`])assert.equal(validLoginEmail(email),false);
  assert.equal(validLoginEmail('person+crm@example.co.uk'),true);
- assert.equal(emailOtpLength(),6);
+ assert.equal(emailOtpLength(),8);
  assert.equal(emailOtpLength(10),10);
  assert.equal(emailOtpLength(5000),6);
- assert.equal(validEmailOtp(' 123456 '),true);
- for(const token of ['12345','1234567','12e456','１２３４５６','123 456'])assert.equal(validEmailOtp(token),false);
- const sdk=fakeClient(),auth=createEmailOtpAuth({enabled:true,getClient:()=>sdk});
+ assert.equal(validEmailOtp(' 12345678 '),true);
+ assert.equal(validEmailOtp(' 123456 ',6),true);
+ for(const token of ['12345','123456','1234567','123456789','12e45678','１２３４５６７８','1234 5678'])assert.equal(validEmailOtp(token),false);
+ const sdk=fakeClient(),auth=createEmailOtpAuth({enabled:true,length:6,getClient:()=>sdk});
  await assert.rejects(auth.requestCode('bad address'),{code:'ATELIER_INVALID_EMAIL'});
  await assert.rejects(auth.verifyCode('person@example.com','12345'),{code:'ATELIER_INVALID_CODE'});
  assert.equal(sdk.calls.length,0);
@@ -43,7 +44,7 @@ test('normalizes email and validates the configured numeric OTP before the provi
 });
 
 test('requests no automatic signup and verification populates the same SDK session',async()=>{
- const sdk=fakeClient(),auth=createEmailOtpAuth({enabled:true,getClient:()=>sdk});
+ const sdk=fakeClient(),auth=createEmailOtpAuth({enabled:true,length:6,getClient:()=>sdk});
  assert.deepEqual(await auth.requestCode(' Person@Example.com '),{email:'person@example.com'});
  assert.deepEqual(sdk.calls[0],['request',{email:'person@example.com',options:{shouldCreateUser:false}}]);
  assert.equal((await sdk.auth.getSession()).data.session,null);
@@ -54,7 +55,7 @@ test('requests no automatic signup and verification populates the same SDK sessi
 
 test('provider errors do not disclose raw messages, addresses or account existence',async()=>{
  for(const providerError of [{code:'user_not_found',message:'Unknown person@example.com; secret=abc'},{message:'SMTP credential secret=abc'},new Error('secret=abc')]){
-  const auth=createEmailOtpAuth({enabled:true,getClient:()=>({auth:{signInWithOtp:async()=>({error:providerError}),verifyOtp:async()=>{throw providerError;}}})});
+  const auth=createEmailOtpAuth({enabled:true,length:6,getClient:()=>({auth:{signInWithOtp:async()=>({error:providerError}),verifyOtp:async()=>{throw providerError;}}})});
   await assert.rejects(auth.requestCode('person@example.com'),error=>error.code==='ATELIER_REQUEST_FAILED'&&!/secret|person@|Unknown/.test(error.message));
   await assert.rejects(auth.verifyCode('person@example.com','123456'),error=>error.code==='ATELIER_VERIFY_FAILED'&&!/secret|person@|Unknown/.test(error.message));
  }
@@ -64,7 +65,7 @@ test('provider errors do not disclose raw messages, addresses or account existen
 
 test('rate limiting is distinguished without echoing provider responses',async()=>{
  for(const error of [{status:429,message:'private'},{code:'over_email_send_rate_limit'},{code:'over_request_rate_limit'}]){
-  const auth=createEmailOtpAuth({enabled:true,getClient:()=>({auth:{signInWithOtp:async()=>({error}),verifyOtp:async()=>({error})}})});
+  const auth=createEmailOtpAuth({enabled:true,length:6,getClient:()=>({auth:{signInWithOtp:async()=>({error}),verifyOtp:async()=>({error})}})});
   await assert.rejects(auth.requestCode('person@example.com'),{code:'ATELIER_RATE_LIMITED'});
   await assert.rejects(auth.verifyCode('person@example.com','123456'),{code:'ATELIER_RATE_LIMITED'});
  }
@@ -72,10 +73,10 @@ test('rate limiting is distinguished without echoing provider responses',async()
 
 test('verification without an authenticated session never reports success',async()=>{
  for(const data of [null,{}, {user:{id:'test-user'}},{session:{user:null}}]){
-  const auth=createEmailOtpAuth({enabled:true,getClient:()=>({auth:{verifyOtp:async()=>({data,error:null})}})});
+  const auth=createEmailOtpAuth({enabled:true,length:6,getClient:()=>({auth:{verifyOtp:async()=>({data,error:null})}})});
   await assert.rejects(auth.verifyCode('person@example.com','123456'),{code:'ATELIER_SESSION_MISSING'});
  }
- const unavailable=createEmailOtpAuth({enabled:true,getClient:()=>null});
+ const unavailable=createEmailOtpAuth({enabled:true,length:6,getClient:()=>null});
  await assert.rejects(unavailable.requestCode('person@example.com'),{code:'ATELIER_REQUEST_FAILED'});
 });
 
@@ -93,7 +94,7 @@ test('email UI, Google and RemoteStore share one SDK session through claim/load 
   if(resource==='rpc/crm_claim_access'){assert.equal(input.method,'POST');return Response.json(1);}
   assert.ok(Object.hasOwn(tables,resource),'No unexpected network destination');return Response.json(tables[resource]);
  };
- const nodes={};for(const key of ['address-form','address','request','code-form','code','verify','resend','change','status','error'])nodes[key]={value:'',textContent:'',focus(){}};
+ const nodes={};for(const key of ['address-form','address','request','existing','code-form','code','verify','resend','change','status','error'])nodes[key]={value:'',textContent:'',focus(){}};
  let remote,result,cleanup;
  config.emailOtpEnabled=true;
  try{
@@ -103,14 +104,16 @@ test('email UI, Google and RemoteStore share one SDK session through claim/load 
    remote=new RemoteStore();assert.equal(await remote.session(),session);
    await remote.request('rpc/crm_claim_access','POST',{});result=await remote.load();
   }});
-  nodes.address.value='person@example.com';await nodes['address-form'].onsubmit({preventDefault(){}});
+  nodes.address.value='person@example.com';nodes.existing.onclick();
+  assert.equal(sdk.calls.filter(([kind])=>kind==='request').length,0);
   assert.equal((await sdk.auth.getSession()).data.session,null);
-  nodes.code.value='123456';await nodes['code-form'].onsubmit({preventDefault(){}});
+  nodes.code.value='12345678';await nodes['code-form'].onsubmit({preventDefault(){}});
   assert.equal(nodes.error.textContent,'');assert.equal(nodes.code.value,'');
   assert.equal(remote.client,sdk);assert.deepEqual(result,{brands:tables.crm_brands,members:tables.crm_members,records:tables.crm_records,events:tables.crm_events});
   assert.deepEqual(requests,['rpc/crm_claim_access','crm_brands','crm_members','crm_records','crm_events']);
   assert.equal((await getAuthClient().auth.getSession()).data.session,session);
   assert.equal(creations,1);
+  assert.deepEqual(sdk.calls[1],['verify',{email:'person@example.com',token:'12345678',type:'email'}]);
   assert.equal(sdk.calls[0][1].provider,'google');
   assert.equal(sdk.calls[0][1].options.redirectTo,config.siteUrl);
   assert.equal(options.auth.flowType,'pkce');

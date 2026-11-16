@@ -64,12 +64,14 @@ Le code utilise `signInWithOtp({options:{shouldCreateUser:false}})` puis `verify
 Avant activation :
 
 1. Raccorder un fournisseur SMTP autorisé et un expéditeur vérifié dans Supabase Auth. Ne jamais placer les identifiants SMTP ou une clé privée dans ce dépôt.
-2. Configurer le modèle Magic Link pour afficher `{{ .Token }}` et vérifier la longueur du code ; `emailOtpLength` vaut 6 par défaut.
+2. Configurer les modèles Magic Link, Invite user et Confirm sign up pour afficher `{{ .Token }}`. Le projet a été contrôlé le 16 novembre 2026 : ses codes ont 8 chiffres et expirent après 3600 secondes. `emailOtpLength` est aligné à 8 ; ne pas réduire le réglage du fournisseur pour adapter le formulaire.
 3. Provisionner le compte destinataire avec le mécanisme administrateur prévu et sa preuve de possession de l’adresse. La réservation d’un rôle ne crée pas ce compte.
 4. Vérifier la réception réelle, les codes expirés/incorrects, la connexion, le rôle effectivement obtenu et l’absence d’autre marque accessible. Ne pas inviter un commercial dans l’organisation Supabase pour contourner les limites d’envoi.
 5. Activer le formulaire, publier la configuration et attribuer les dossiers Opéria au compte commercial. Vérifier à nouveau la visibilité avec ce compte réel.
 
 La préparation technique et les tests simulés ne constituent pas un test de délivrance. Références : [connexion sans mot de passe](https://supabase.com/docs/guides/auth/auth-email-passwordless), [configuration SMTP](https://supabase.com/docs/guides/auth/auth-smtp).
+
+Le bouton « J’ai déjà un code » permet de saisir directement un code d’invitation reçu, sans déclencher un nouvel envoi. Il capture l’adresse et conserve les limites de tentative ; la vérification utilise le même client et `type: 'email'`. Le parcours d’invitation numérique reste à vérifier avec le fournisseur réel après activation SMTP. Éviter la redirection d’invitation implicite par défaut : le client actuel est configuré en PKCE. La confirmation de possession de l’adresse doit provenir de la vérification du code, pas d’une affirmation de réception par l’administrateur.
 
 ## Vérifications locales
 
