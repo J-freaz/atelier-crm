@@ -7,6 +7,7 @@ import * as access from '../access.mjs';
 import * as operiaDomain from '../operia-domain.mjs';
 import * as operiaUI from '../operia-ui.mjs';
 import * as workflow from '../operia-workflow.mjs';
+import {renderOperiaResources} from '../operia-resources.mjs';
 import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
 const source=(await readFile(new URL('../app.mjs',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/^login\(\);$/m,'').replace(/^resumeGoogle\(\);$/m,'');
 const dataset=(id='sales')=>({brands:[{id:'op',name:id==='demo'?'Démonstration fictive':'Espace privé fictif',profile:'operia'}],members:[{brand_id:'op',user_id:id,role:'commercial',display_name:'Utilisateur fictif'}],records:[],events:[]});
@@ -16,7 +17,7 @@ function setup(){
  async function phase(name){state.calls.push(name);if(state.pause===name)await new Promise(resolve=>{state.release=resolve;});if(state.fail===name)throw Error('Fictive failure: '+name);}
  class RemoteStore{async session(){await phase('session');return {user:{id:'sales'}};}async request(path){assert.equal(path,'rpc/crm_claim_access');await phase('claim');return [];}async load(){await phase('load');return dataset();}async logout(){}}
  class DemoStore{constructor(){this.user={id:'demo'};}async load(){return dataset('demo');}async logout(){}}
- const dependencies={...domain,...access,...operiaDomain,...operiaUI,...workflow,e:domain.escapeHTML,document,FormData:window.FormData,AbortController:window.AbortController,location:window.location,history:window.history,config:{googleEnabled:true,emailOtpEnabled:true},setTimeout:()=>0,RemoteStore,DemoStore,
+ const dependencies={...domain,...access,...operiaDomain,...operiaUI,...workflow,e:domain.escapeHTML,renderOperiaResources,document,FormData:window.FormData,AbortController:window.AbortController,location:window.location,history:window.history,config:{googleEnabled:true,emailOtpEnabled:true},setTimeout:()=>0,RemoteStore,DemoStore,
   googleSignIn:async()=>{state.google++;if(state.googleFail)throw Error('Google fictif indisponible');},
   emailLoginMarkup:()=>emailLoginMarkup({enabled:true,otpLength:8}),
   bindEmailLogin:options=>bindEmailLogin({...options,enabled:true,otpLength:8,requestCode:async()=>{state.codesRequested++;},verifyCode:async()=>{state.codesVerified++;return {user:{id:'sales'}};},setTimer:()=>1,clearTimer:()=>{}})};

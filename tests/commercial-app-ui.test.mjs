@@ -7,6 +7,7 @@ import * as access from '../access.mjs';
 import * as operiaDomain from '../operia-domain.mjs';
 import * as operiaUI from '../operia-ui.mjs';
 import * as workflow from '../operia-workflow.mjs';
+import {renderOperiaResources} from '../operia-resources.mjs';
 import {renderContactContext} from '../contact-context.mjs';
 const source=(await readFile(new URL('../app.mjs',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/^login\(\);$/m,'').replace(/^resumeGoogle\(\);$/m,'');
 const row=(extra={})=>({id:'own',brand_id:'op',kind:'contact',name:'Entreprise attribuée',owner_id:'sales',status:'À qualifier',related_id:null,source:'Source vérifiée',notes:'Note conservée.',email:'',phone:'',website:'',amount_cents:0,paid_cents:0,quantity:1,due_date:null,archived:false,version:1,metadata:{operia:{...operiaDomain.emptyOperia(),siren:'123456789'}},...extra});
@@ -15,7 +16,7 @@ function setup(role='commercial',brandProfile='operia'){
  document.body.innerHTML='<div id="app"></div><dialog id="editor"></dialog><div id="notice"></div>';
  const data={brands:[{id:'op',name:'Opéria test',profile:brandProfile},{id:'other',name:'Marque non autorisée',profile:'general'}],members:[{brand_id:'op',user_id:'sales',display_name:'Commercial test',role},{brand_id:'op',user_id:'admin',display_name:'Administrateur test',role:'owner'}],records:[row(),row({id:'secret',name:'Entreprise confidentielle',owner_id:'admin'}),row({id:'archive',name:'Archive confidentielle',archived:true})],events:[{id:'e1',brand_id:'op',record_id:'own',record_name:'Entreprise attribuée',created_at:'2026-11-15',action:'Modification'},{id:'e2',brand_id:'op',record_id:'secret',record_name:'Entreprise confidentielle',created_at:'2026-11-15',action:'Modification'}]};
  const saves=[],store={load:async()=>data,save:async record=>{const saved={...record,id:record.id||'new-record',version:(record.version||0)+1};saves.push(saved);const i=data.records.findIndex(r=>r.id===saved.id);if(i<0)data.records.push(saved);else data.records[i]=saved;return saved;}};
- const dependencies={...domain,...access,...operiaDomain,...operiaUI,...workflow,e:domain.escapeHTML,renderContactContext,document,FormData:window.FormData,AbortController:window.AbortController,config:{},googleSignIn:async()=>{},RemoteStore:class{},DemoStore:class{},setTimeout:()=>0};
+ const dependencies={...domain,...access,...operiaDomain,...operiaUI,...workflow,e:domain.escapeHTML,renderContactContext,renderOperiaResources,document,FormData:window.FormData,AbortController:window.AbortController,config:{},googleSignIn:async()=>{},RemoteStore:class{},DemoStore:class{},setTimeout:()=>0};
  const app=new Function('dependencies','fixture',`const {${Object.keys(dependencies).join(',')}}=dependencies;${source}\ndata=fixture.data;store=fixture.store;user={id:'sales'};brand='op';return {render,edit,saveRecord,selection,navNames,draft,exportCSV,importDialog,newBrand,activity,setView:value=>view=value,setBrand:value=>brand=value};`)(dependencies,{data,store});
  return {app,data,saves,store,window,document,close:()=>window.happyDOM.close()};
 }
@@ -85,4 +86,29 @@ test('existing Nanayé editor and viewer navigation stays available with the sam
   assert.equal(!!t.document.querySelector('#new'),role!=='viewer');assert.equal(!!t.document.querySelector('[data-owner]'),role!=='viewer');assert.match(t.document.body.textContent,/Entreprise confidentielle/);
   t.app.edit(t.data.records[0]);assert.equal(!!t.document.querySelector('#save'),role!=='viewer');
  }finally{await t.close();}}
+});
+
+test('Opéria owner and commercial see video controls and download link without autoplay',async()=>{
+ for(const role of ['owner','commercial']){const t=setup(role);try{
+  t.app.render();const card=t.document.querySelector('.operia-resources'),video=card?.querySelector('video');
+  assert.ok(card);assert.equal(card,t.document.querySelector('#content').lastElementChild);assert.ok(video);
+  assert.match(card.textContent,/Présentation Opéria/);assert.match(card.textContent,/Vidéo de Dylan · reçue le 17 novembre 2026/);
+  assert.equal(video.hasAttribute('controls'),true);assert.equal(video.hasAttribute('playsinline'),true);assert.equal(video.getAttribute('preload'),'none');assert.equal(video.hasAttribute('autoplay'),false);
+  assert.equal(video.getAttribute('poster'),'assets/operia/presentation-dylan-2026-11-17.jpg');
+  const source=video.querySelector('source'),download=card.querySelector('a[download]');assert.equal(source.getAttribute('type'),'video/mp4');assert.equal(download.getAttribute('href'),source.getAttribute('src'));
+  assert.equal(t.saves.length,0);
+ }finally{await t.close();}}
+});
+
+test('the presentation never appears in Nanayé and disappears when switching away from Opéria',async()=>{
+ for(const role of ['owner','editor','viewer']){const t=setup(role,'general');try{
+  t.app.render();assert.equal(t.document.querySelector('.operia-resources'),null);assert.equal(t.document.querySelector('video'),null);
+ }finally{await t.close();}}
+ const t=setup('owner');try{
+  t.data.members.push({brand_id:'other',user_id:'sales',display_name:'Administrateur test',role:'owner'});
+  t.app.render();const video=t.document.querySelector('video');assert.ok(video);
+  const selector=t.document.querySelector('#brand');selector.value='other';selector.dispatchEvent(new t.window.Event('change'));
+  assert.equal(t.document.querySelector('.operia-resources'),null);assert.equal(t.document.querySelector('video'),null);assert.equal(video.isConnected,false);
+  assert.equal(renderOperiaResources({profile:'general'}),'');assert.equal(t.saves.length,0);
+ }finally{await t.close();}
 });
