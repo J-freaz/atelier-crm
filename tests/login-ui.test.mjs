@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
+import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261117-2';
 
 function fixture(options={}){
  const nodes={};
@@ -14,7 +14,7 @@ function fixture(options={}){
 const deferred=()=>{let resolve,reject;const promise=new Promise((ok,no)=>{resolve=ok;reject=no;});return {promise,resolve,reject};};
 
 test('disabled email login renders nothing and binds no network handlers',()=>{
- assert.equal(emailLoginMarkup(), '');
+ assert.equal(emailLoginMarkup({enabled:false}), '');
  let touched=false;
  const cleanup=bindEmailLogin({enabled:false,root:{querySelector(){touched=true;}},requestCode:()=>{throw Error('Unexpected request');}});
  cleanup();assert.equal(touched,false);

@@ -2,12 +2,12 @@ import {mailHistoryMarkup,bindMailHistory,previewMail} from './mail-ui.mjs?v=202
 import {renderGmailPanel,bindGmailPanel} from './gmail-ui.mjs?v=20261016-1';
 import {renderContactContext} from './contact-context.mjs?v=20261016-1';
 import {openProspectDraft} from './draft-ui.mjs?v=20261112-1';
-import {config} from './config.mjs?v=20261116-2';
-import {googleSignIn} from './auth.mjs?v=20261116-2';
-import {emailLoginMarkup,bindEmailLogin} from './login-ui.mjs?v=20261116-2';
+import {config} from './config.mjs?v=20261117-2';
+import {googleSignIn} from './auth.mjs?v=20261117-2';
+import {emailLoginMarkup,bindEmailLogin} from './login-ui.mjs?v=20261117-2';
 import {accessFor,assertRecordSave,appendCommercialNote} from './access.mjs?v=20261116-1';
 import {stages,labels,escapeHTML as e,cents,money,day,validate,visible,metrics,csvCell,duplicate} from './domain.mjs';
-import {RemoteStore,DemoStore} from './store.mjs?v=20261116-2';
+import {RemoteStore,DemoStore} from './store.mjs?v=20261117-2';
 import {isOperiaBrand,operiaOf,operiaMetrics} from './operia-domain.mjs?v=20261019-1';
 import {renderOperiaProspection,bindOperiaProspection,renderOperiaQualification,readOperiaQualification} from './operia-ui.mjs?v=20261116-1';
 import {openOperiaImport,openOperiaDraft,exportOperiaBackup} from './operia-workflow.mjs?v=20261116-1';

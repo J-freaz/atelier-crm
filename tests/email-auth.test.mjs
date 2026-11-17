@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {config} from '../config.mjs?v=20261116-2';
-import {createEmailOtpAuth,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength,emailAuthErrorMessage,getAuthClient,googleSignIn} from '../auth.mjs?v=20261116-2';
-import {bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
-import {RemoteStore} from '../store.mjs?v=20261116-2';
+import {config} from '../config.mjs?v=20261117-2';
+import {createEmailOtpAuth,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength,emailAuthErrorMessage,getAuthClient,googleSignIn} from '../auth.mjs?v=20261117-2';
+import {bindEmailLogin} from '../login-ui.mjs?v=20261117-2';
+import {RemoteStore} from '../store.mjs?v=20261117-2';
 
 const session={user:{id:'test-user'},access_token:'test-session-token',expires_at:Math.floor(Date.now()/1000)+3600};
 function fakeClient(){
@@ -16,8 +16,9 @@ function fakeClient(){
  }};
 }
 
-test('email auth is disabled by default and cannot call the provider',async()=>{
- assert.equal(config.emailOtpEnabled,false);
+test('email auth is enabled in configuration but its explicit off switch blocks provider calls',async()=>{
+ assert.equal(config.emailOtpEnabled,true);
+ assert.equal(config.googleEnabled,true);
  let count=0;const auth=createEmailOtpAuth({enabled:false,getClient:()=>{count++;return fakeClient();}});
  await assert.rejects(auth.requestCode('person@example.com'),{code:'ATELIER_EMAIL_DISABLED'});
  await assert.rejects(auth.verifyCode('person@example.com','123456'),{code:'ATELIER_EMAIL_DISABLED'});

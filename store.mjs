@@ -1,6 +1,6 @@
 import {loadDraft,saveDraft,draftPayload} from './message-drafts.mjs?v=20261112-1';
-import {config} from './config.mjs?v=20261116-2';
-import {getAuthClient} from './auth.mjs?v=20261116-2';
+import {config} from './config.mjs?v=20261117-2';
+import {getAuthClient} from './auth.mjs?v=20261117-2';
 export class RemoteStore {
  constructor(){this.token=null;this.user=null;this.expires=0;this.client=getAuthClient();}
  async session(){if(!this.client)return null;const {data,error}=await this.client.auth.getSession();if(error)throw Error("Connexion non finalisée. Réessayez.");if(data.session){this.token=data.session.access_token;this.user=data.session.user;this.expires=data.session.expires_at*1000;}else{this.token=null;this.user=null;this.expires=0;}return data.session;}

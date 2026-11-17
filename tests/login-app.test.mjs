@@ -8,7 +8,7 @@ import * as operiaDomain from '../operia-domain.mjs';
 import * as operiaUI from '../operia-ui.mjs';
 import * as workflow from '../operia-workflow.mjs';
 import {renderOperiaResources} from '../operia-resources.mjs';
-import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261116-2';
+import {emailLoginMarkup,bindEmailLogin} from '../login-ui.mjs?v=20261117-2';
 const source=(await readFile(new URL('../app.mjs',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace(/^login\(\);$/m,'').replace(/^resumeGoogle\(\);$/m,'');
 const dataset=(id='sales')=>({brands:[{id:'op',name:id==='demo'?'Démonstration fictive':'Espace privé fictif',profile:'operia'}],members:[{brand_id:'op',user_id:id,role:'commercial',display_name:'Utilisateur fictif'}],records:[],events:[]});
 function setup(){

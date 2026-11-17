@@ -1,5 +1,5 @@
-import {config} from './config.mjs?v=20261116-2';
-import {requestEmailCode,verifyEmailCode,emailAuthErrorMessage,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength} from './auth.mjs?v=20261116-2';
+import {config} from './config.mjs?v=20261117-2';
+import {requestEmailCode,verifyEmailCode,emailAuthErrorMessage,normalizeLoginEmail,validLoginEmail,validEmailOtp,emailOtpLength} from './auth.mjs?v=20261117-2';
 
 export function emailLoginMarkup({enabled=config.emailOtpEnabled,otpLength=emailOtpLength()}={}){
  if(!enabled)return '';

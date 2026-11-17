@@ -55,9 +55,9 @@ Le mécanisme existant `crm_claim_access()` exige un email confirmé corresponda
 
 Le claim parcourt toutes les réservations valides de l’adresse. Avant l’activation, vérifier l’absence d’une autre adhésion ou réservation non souhaitée, puis contrôler le rôle effectivement créé. Une adhésion existante n’est pas remplacée par le claim. L’expiration de réservation n’est pas une expiration de l’adhésion après activation.
 
-### Connexion par code e-mail, préparée mais désactivée
+### Connexion par code e-mail
 
-`config.emailOtpEnabled` reste à `false`. La connexion Google existante reste disponible. Le formulaire e-mail n’est pas affiché tant que son service d’envoi n’est pas opérationnel.
+`config.emailOtpEnabled` vaut `true` dans cette version. La connexion Google existante reste disponible. Le 17 novembre 2026, le fournisseur SMTP Brevo et les trois modèles de code ont été configurés ; un message de test a été retrouvé dans la boîte de réception du propriétaire. Ce contrôle valide l’envoi à cette boîte, pas la réception ou la première connexion de chaque collaborateur. Les accès restent conditionnés à la vérification de l’adresse et aux réservations et adhésions en base.
 
 Le code utilise `signInWithOtp({options:{shouldCreateUser:false}})` puis `verifyOtp({type:'email'})`, avec le même client Supabase que le CRM. La session reste en mémoire. Le chargement du CRM n’est validé qu’après la réclamation de l’accès et la lecture des données ; un échec peut être réessayé sans consommer le code une seconde fois. Une réponse tardive ne remplace pas un écran quitté.
 

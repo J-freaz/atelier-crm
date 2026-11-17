@@ -1,4 +1,4 @@
-import {config} from './config.mjs?v=20261116-2';
+import {config} from './config.mjs?v=20261117-2';
 let client;
 const memory=new Map();
 // Only the short-lived PKCE verifier survives the redirect. Sessions remain in memory.
